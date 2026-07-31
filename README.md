@@ -4,6 +4,8 @@ Ranks **skills** and **characters** for a selected racecourse in *Uma Musume: Pr
 
 For each skill it answers: *can it fire here, how often, and how many horse lengths is it actually worth on this course?*
 
+**Live site: https://thdabezt.github.io/uma-course-skill-ranker/**
+
 ---
 
 ## Quick start
@@ -50,6 +52,21 @@ src/skills/          condition parser, activation analysis, effect handling
 src/ranking/         skill evaluation, skill ranking, character ranking
 src/components/      React UI
 tests/               Vitest suites
+.github/workflows/   ci.yml (typecheck, lint, test), deploy.yml (Pages)
+```
+
+---
+
+## Deployment
+
+The app is entirely client-side, so it ships as a Next.js static export to
+GitHub Pages. Every push to `main` runs `.github/workflows/deploy.yml`.
+
+Project sites live under `/<repo>`, so the build needs a matching prefix — set
+by the workflow, and empty in `next dev`:
+
+```bash
+NEXT_PUBLIC_BASE_PATH=/uma-course-skill-ranker npm run build
 ```
 
 ---
