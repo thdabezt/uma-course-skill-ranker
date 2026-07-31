@@ -1,0 +1,172 @@
+{
+  "generatedAt": "2026-07-31T07:32:15.478Z",
+  "dataFetchedAt": "2026-07-30T21:12:41.511Z",
+  "server": "Global (EN)",
+  "source": {
+    "name": "GameTora",
+    "homepage": "https://gametora.com/umamusume",
+    "manifest": "https://gametora.com/data/manifests/umamusume.json",
+    "documents": [
+      {
+        "key": "skills",
+        "file": "skills.json",
+        "contentHash": "8171b191",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.8171b191.json"
+      },
+      {
+        "key": "characters",
+        "file": "characters.json",
+        "contentHash": "cceeef09",
+        "sourceUrl": "https://gametora.com/data/umamusume/characters.cceeef09.json"
+      },
+      {
+        "key": "character-cards",
+        "file": "character-cards.json",
+        "contentHash": "41c1380e",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.41c1380e.json"
+      },
+      {
+        "key": "racetracks",
+        "file": "racetracks.json",
+        "contentHash": "7d2f3355",
+        "sourceUrl": "https://gametora.com/data/umamusume/racetracks.7d2f3355.json"
+      },
+      {
+        "key": "racetracks_extended",
+        "file": "racetracks-extended.json",
+        "contentHash": "0cc38efc",
+        "sourceUrl": "https://gametora.com/data/umamusume/racetracks_extended.0cc38efc.json"
+      },
+      {
+        "key": "races",
+        "file": "races.json",
+        "contentHash": "55dde7c9",
+        "sourceUrl": "https://gametora.com/data/umamusume/races.55dde7c9.json"
+      },
+      {
+        "key": "static/skill_conditions",
+        "file": "skill-conditions.json",
+        "contentHash": "6bef7138",
+        "sourceUrl": "https://gametora.com/data/umamusume/static/skill_conditions.6bef7138.json"
+      }
+    ]
+  },
+  "counts": {
+    "courses": 119,
+    "skills": 653,
+    "characters": 95,
+    "conditions": 142,
+    "excludedCourses": 19,
+    "excludedSkills": 1307,
+    "excludedCharacters": 167,
+    "excludedNegativeSkills": 50,
+    "inheritedUniqueSkills": 97,
+    "skillsUsingGlobalOverride": 72,
+    "charactersWithGameToraUrl": 95,
+    "skillsWithGameToraUrl": 207,
+    "rejected": 0
+  },
+  "courseAudit": {
+    "checked": 119,
+    "errors": 0,
+    "warnings": 12,
+    "issues": [
+      {
+        "severity": "warning",
+        "courseId": 10707,
+        "course": "Chukyo Dirt 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10702,
+        "course": "Chukyo Turf 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10911,
+        "course": "Hanshin Dirt 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10902,
+        "course": "Hanshin Turf 1400m (outer)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 11301,
+        "course": "Kawasaki Dirt 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10813,
+        "course": "Kyoto Dirt 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10802,
+        "course": "Kyoto Turf 1400m (outer)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10803,
+        "course": "Kyoto Turf 1400m",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10303,
+        "course": "Niigata Turf 1400m (outer)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10609,
+        "course": "Tokyo Dirt 1300m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1300 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10610,
+        "course": "Tokyo Dirt 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      },
+      {
+        "severity": "warning",
+        "courseId": 10601,
+        "course": "Tokyo Turf 1400m (inner)",
+        "check": "upstream-distance-category",
+        "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
+      }
+    ]
+  },
+  "evolutionSkillsAvailableOnGlobal": false,
+  "notes": [
+    "Global availability for skills comes from GameTora's per-server `unreleased` list.",
+    "Global availability for characters comes from the `release_en` field on the character card.",
+    "Global availability for racecourses is derived from races that are released on the Global server.",
+    "Distance categories come from src/courses/distanceCategory.ts (Sprint <=1400, Mile <=1800, Medium <=2400, Long >2500-), not from GameTora's numeric enum.",
+    "Negative skills (x aptitudes, bad conditions, purple negatives) are dropped at normalization and never enter any ranking.",
+    "Skill values come from GameTora's per-server `loc.en` block where one exists, so Global keeps its own balance when Japan has been rebalanced (e.g. Certain Victory).",
+    "Each unique skill also ships its inheritable copy as a separate 200 SP skill with its own (usually weaker) values.",
+    "GameTora publishes no per-skill page, so only unique skills carry a link (to the owning character card page).",
+    "No evolution skill is released on Global yet, so character scores currently contain the unique skill only."
+  ]
+}

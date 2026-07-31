@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
+
+# Raw upstream payloads are large and reproducible via `npm run data:fetch`.
+data/raw/*.json
+!data/raw/.gitkeep
