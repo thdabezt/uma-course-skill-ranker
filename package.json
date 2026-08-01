@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "npx --yes serve@latest out -l 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -14,7 +14,8 @@
     "data:fetch": "node scripts/fetch-gametora.mjs",
     "data:build": "node --experimental-strip-types scripts/build-data.mjs",
     "data:refresh": "node scripts/fetch-gametora.mjs && node --experimental-strip-types scripts/build-data.mjs",
-    "data:audit": "node --experimental-strip-types scripts/audit-courses.mjs"
+    "data:audit": "node --experimental-strip-types scripts/audit-courses.mjs",
+    "preview": "npm run build && npm run start"
   },
   "dependencies": {
     "next": "^15.5.22",

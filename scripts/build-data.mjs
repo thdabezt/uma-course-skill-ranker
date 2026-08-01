@@ -357,6 +357,8 @@ async function main() {
   const rawTracks = await readRaw('racetracks.json');
   const rawRaces = await readRaw('races.json');
   const rawConditions = await readRaw('skill-conditions.json');
+  const rawCmGlobal = await readRaw('champions-meeting-global.json');
+  const rawCmJp = await readRaw('champions-meeting-jp.json');
 
   const rejected = [];
   const reject = (kind, id, reason) => rejected.push({ kind, id, reason });
@@ -843,6 +845,105 @@ async function main() {
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  /* ---------------------------------------------------- event presets */
+
+  // Champions Meeting cups are zodiac-named. Global runs the same sequence as Japan
+  // with the same ids (verified: ids 1-16 match on track/distance/surface/direction),
+  // so an id Japan has run but Global has not is a genuine upcoming Global cup.
+  const ZODIAC_EN = {
+    'ヴァルゴ': 'Virgo',
+    'ライブラ': 'Libra',
+    'スコーピオ': 'Scorpio',
+    'サジタリウス': 'Sagittarius',
+    'カプリコーン': 'Capricorn',
+    'アクエリアス': 'Aquarius',
+    'ピスケス': 'Pisces',
+    'アリエス': 'Aries',
+    'タウラス': 'Taurus',
+    'ジェミニ': 'Gemini',
+    'キャンサー': 'Cancer',
+    'レオ': 'Leo',
+  };
+  const CONDITION_NAMES = { 1: 'firm', 2: 'good', 3: 'soft', 4: 'heavy' };
+  const WEATHER_NAMES = { 1: 'sunny', 2: 'cloudy', 3: 'rainy', 4: 'snowy' };
+  const SEASON_NAMES = { 1: 'spring', 2: 'summer', 3: 'autumn', 4: 'winter', 5: 'sakura' };
+
+  const cupNameEn = (raw) => {
+    if (/^[ -\s!]+$/.test(raw)) return raw;
+    for (const [jp, en] of Object.entries(ZODIAC_EN)) {
+      if (raw.includes(jp)) return `${en} Cup`;
+    }
+    return raw;
+  };
+
+  /** Resolve a cup's race definition to one of our normalized courses. */
+  const resolveCourse = (race) => {
+    const surface = SURFACE[race.ground];
+    const direction = DIRECTION[race.turn];
+    const matches = courses.filter(
+      (c) => c.trackId === Number(race.track) && c.distance === race.distance && c.surface === surface,
+    );
+    if (!matches.length) return null;
+    return matches.find((c) => c.direction === direction) ?? matches[0];
+  };
+
+  const globalCmIds = new Set(rawCmGlobal.map((c) => c.id));
+  const highestGlobalCmId = Math.max(0, ...rawCmGlobal.map((c) => c.id));
+
+  const championsMeetings = rawCmJp
+    .filter((c) => c.race)
+    .map((c) => {
+      const course = resolveCourse(c.race);
+      const released = globalCmIds.has(c.id);
+      const globalEntry = rawCmGlobal.find((g) => g.id === c.id);
+      return {
+        kind: 'champions-meeting',
+        id: c.id,
+        name: released && globalEntry ? globalEntry.name : cupNameEn(c.name),
+        status: released ? 'released-on-global' : 'upcoming-on-global',
+        courseId: course ? course.id : null,
+        courseName: course ? course.name : null,
+        trackId: Number(c.race.track),
+        distance: c.race.distance,
+        surface: SURFACE[c.race.ground] ?? null,
+        direction: DIRECTION[c.race.turn] ?? null,
+        trackCondition: CONDITION_NAMES[c.race.condition] ?? 'firm',
+        weather: WEATHER_NAMES[c.race.weather] ?? 'sunny',
+        season: SEASON_NAMES[c.race.season] ?? 'spring',
+        startsAt: released && globalEntry ? globalEntry.start : null,
+        endsAt: released && globalEntry ? globalEntry.end : null,
+        sourceUrl: `${SOURCE}/events/champions-meeting?cm=${c.id}`,
+      };
+    })
+    .filter((c) => c.courseId !== null);
+
+  const upcomingCm = championsMeetings.filter((c) => c.status === 'upcoming-on-global');
+
+  const eventPresets = {
+    generatedAt: new Date().toISOString(),
+    note:
+      'Champions Meeting cups run in the same order on Global as in Japan (ids 1-16 verified identical), ' +
+      'so a cup Japan has already run but Global has not is a genuine preview of an upcoming Global cup.',
+    championsMeeting: {
+      available: true,
+      highestGlobalId: highestGlobalCmId,
+      firstUpcomingId: upcomingCm.length ? upcomingCm[0].id : null,
+      entries: championsMeetings,
+      sourceUrl: `${SOURCE}/events/champions-meeting`,
+    },
+    leagueOfHeroes: {
+      available: false,
+      // GameTora's League of Heroes page is a static explainer image; it loads no
+      // schedule payload and the data manifest has no league-of-heroes key, so there
+      // is nothing to build presets from. Recorded rather than invented.
+      reason:
+        'GameTora publishes no structured League of Heroes schedule - its page is a static image and the ' +
+        'data manifest has no matching key. The event has also not run on Global yet.',
+      sourceUrl: `${SOURCE}/events/league-of-heroes`,
+      entries: [],
+    },
+  };
+
   /* ------------------------------------------------------------ audit */
 
   const audit = auditCourses(courses);
@@ -872,6 +973,8 @@ async function main() {
       excludedSkills: excludedSkills.length,
       excludedCharacters: excludedCharacters.length,
       excludedNegativeSkills: negativeSkillCount,
+      championsMeetingPresets: championsMeetings.length,
+      upcomingChampionsMeetings: upcomingCm.length,
       inheritedUniqueSkills: inheritedUniqueCount,
       skillsUsingGlobalOverride: globalOverrideCount,
       charactersWithGameToraUrl: characters.filter((c) => c.gameToraUrl).length,
@@ -904,6 +1007,7 @@ async function main() {
   await writeFile(path.join(OUT, 'skills.json'), JSON.stringify(skills), 'utf8');
   await writeFile(path.join(OUT, 'characters.json'), JSON.stringify(characters), 'utf8');
   await writeFile(path.join(OUT, 'skill-conditions.json'), JSON.stringify(conditions), 'utf8');
+  await writeFile(path.join(OUT, 'event-presets.json'), JSON.stringify(eventPresets), 'utf8');
   await writeFile(
     path.join(OUT, 'excluded-non-global.json'),
     JSON.stringify({
@@ -926,6 +1030,10 @@ async function main() {
   );
   console.log(`  characters  ${characters.length} (excluded ${excludedCharacters.length})`);
   console.log(`  conditions  ${conditions.length}`);
+  console.log(
+    `  presets     ${championsMeetings.length} Champions Meeting cups (${upcomingCm.length} upcoming on Global, ` +
+      `next id ${upcomingCm.length ? upcomingCm[0].id : '-'}) - League of Heroes: no data published`,
+  );
   console.log(
     `  GameTora links: ${characters.filter((c) => c.gameToraUrl).length} characters, ${linkedSkills} skills` +
       (missingCharacterUrls.length ? ` (${missingCharacterUrls.length} character(s) without a slug)` : ''),

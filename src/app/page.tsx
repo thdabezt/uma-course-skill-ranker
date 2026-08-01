@@ -6,6 +6,7 @@ import { CharacterRanking } from '@/components/CharacterRanking';
 import { CourseInfo } from '@/components/CourseInfo';
 import { CourseSelector, defaultSelection, resolveSelection, type Selection } from '@/components/CourseSelector';
 import { DevExcluded } from '@/components/DevExcluded';
+import { EventPresets } from '@/components/EventPresets';
 import { RunnerPanel } from '@/components/RunnerPanel';
 import { SkillRanking } from '@/components/SkillRanking';
 import type { ActivationOverlay } from '@/components/CourseDiagram';
@@ -170,6 +171,7 @@ export default function Page() {
       </header>
 
       <CourseSelector selection={selection} onChange={setSelection} />
+      <EventPresets selection={selection} onApply={setSelection} />
       <RunnerPanel runner={runner} onChange={setRunner} />
 
       {error && (

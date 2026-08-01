@@ -9,6 +9,7 @@ import coursesJson from '@data/normalized/courses.json';
 import metaJson from '@data/normalized/meta.json';
 import skillConditionsJson from '@data/normalized/skill-conditions.json';
 import skillsJson from '@data/normalized/skills.json';
+import eventPresetsJson from '@data/normalized/event-presets.json';
 
 import type { CharacterCard, Course, Skill, SkillConditionDoc } from '@/simulation/types';
 
@@ -33,6 +34,45 @@ export interface DataMeta {
 }
 
 export const dataMeta = metaJson as unknown as DataMeta;
+
+export interface ChampionsMeetingPreset {
+  kind: 'champions-meeting';
+  id: number;
+  name: string;
+  status: 'released-on-global' | 'upcoming-on-global';
+  courseId: number | null;
+  courseName: string | null;
+  trackId: number;
+  distance: number;
+  surface: 'turf' | 'dirt' | null;
+  direction: 'right' | 'left' | 'straight' | null;
+  trackCondition: 'firm' | 'good' | 'soft' | 'heavy';
+  weather: 'sunny' | 'cloudy' | 'rainy' | 'snowy';
+  season: 'spring' | 'summer' | 'autumn' | 'winter' | 'sakura';
+  startsAt: number | null;
+  endsAt: number | null;
+  sourceUrl: string;
+}
+
+export interface EventPresets {
+  generatedAt: string;
+  note: string;
+  championsMeeting: {
+    available: boolean;
+    highestGlobalId: number;
+    firstUpcomingId: number | null;
+    entries: ChampionsMeetingPreset[];
+    sourceUrl: string;
+  };
+  leagueOfHeroes: {
+    available: boolean;
+    reason: string;
+    sourceUrl: string;
+    entries: never[];
+  };
+}
+
+export const eventPresets = eventPresetsJson as unknown as EventPresets;
 
 export const skillsById = new Map(skills.map((s) => [s.id, s]));
 export const coursesById = new Map(courses.map((c) => [c.id, c]));

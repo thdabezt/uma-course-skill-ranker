@@ -7,11 +7,11 @@
  * `/data/manifests/umamusume.json` and serves plain JSON documents at
  * `/data/umamusume/<key>.<hash>.json`. Those URLs are public, un-authenticated,
  * cacheable and are NOT disallowed by https://gametora.com/robots.txt. We read the
- * manifest once and then pull a small fixed list of documents (8 requests total,
+ * manifest once and then pull a small fixed list of documents (10 requests total,
  * sequential, with a polite delay). This is deliberately not a crawler: no link
  * following, no pagination, no HTML parsing, no per-entity requests.
  *
- * Total request count per refresh: 1 manifest + 7 documents.
+ * Total request count per refresh: 1 manifest + 9 documents.
  *
  * Nothing here is transformed. Normalization happens in `scripts/build-data.mjs`,
  * so raw upstream payloads and application data stay separate.
@@ -30,7 +30,7 @@ const RAW_DIR = path.join(ROOT, 'data', 'raw');
 const ORIGIN = 'https://gametora.com';
 const MANIFEST_URL = `${ORIGIN}/data/manifests/umamusume.json`;
 const USER_AGENT =
-  'uma-course-skill-ranker/0.1 (personal, non-commercial analysis tool; low volume: 8 requests per refresh)';
+  'uma-course-skill-ranker/0.1 (personal, non-commercial analysis tool; low volume: 10 requests per refresh)';
 
 /** Manifest keys we consume, mapped to the local file name we store them under. */
 const DOCUMENTS = [
@@ -40,6 +40,8 @@ const DOCUMENTS = [
   { key: 'racetracks', file: 'racetracks.json' },
   { key: 'racetracks_extended', file: 'racetracks-extended.json' },
   { key: 'races', file: 'races.json' },
+  { key: 'en/events/champions-meeting', file: 'champions-meeting-global.json' },
+  { key: 'events/champions-meeting', file: 'champions-meeting-jp.json' },
   { key: 'static/skill_conditions', file: 'skill-conditions.json' },
 ];
 

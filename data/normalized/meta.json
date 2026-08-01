@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-31T07:32:15.478Z",
-  "dataFetchedAt": "2026-07-30T21:12:41.511Z",
+  "generatedAt": "2026-08-01T12:39:58.811Z",
+  "dataFetchedAt": "2026-08-01T12:38:55.719Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "8171b191",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.8171b191.json"
+        "contentHash": "d2bcbaba",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.d2bcbaba.json"
       },
       {
         "key": "characters",
@@ -22,8 +22,8 @@
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "41c1380e",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.41c1380e.json"
+        "contentHash": "13757beb",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.13757beb.json"
       },
       {
         "key": "racetracks",
@@ -44,6 +44,18 @@
         "sourceUrl": "https://gametora.com/data/umamusume/races.55dde7c9.json"
       },
       {
+        "key": "en/events/champions-meeting",
+        "file": "champions-meeting-global.json",
+        "contentHash": "fb155c3e",
+        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.fb155c3e.json"
+      },
+      {
+        "key": "events/champions-meeting",
+        "file": "champions-meeting-jp.json",
+        "contentHash": "7af42cb7",
+        "sourceUrl": "https://gametora.com/data/umamusume/events/champions-meeting.7af42cb7.json"
+      },
+      {
         "key": "static/skill_conditions",
         "file": "skill-conditions.json",
         "contentHash": "6bef7138",
@@ -60,6 +72,8 @@
     "excludedSkills": 1307,
     "excludedCharacters": 167,
     "excludedNegativeSkills": 50,
+    "championsMeetingPresets": 45,
+    "upcomingChampionsMeetings": 29,
     "inheritedUniqueSkills": 97,
     "skillsUsingGlobalOverride": 72,
     "charactersWithGameToraUrl": 95,
