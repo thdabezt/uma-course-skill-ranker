@@ -1,8 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { eventPresets, type ChampionsMeetingPreset } from '@/data';
+import {
+  cupState,
+  dataAgeDays,
+  dataMeta,
+  eventPresets,
+  nextCup,
+  type ChampionsMeetingPreset,
+  type CupState,
+} from '@/data';
 import { DISTANCE_CATEGORY_LABELS, getDistanceCategory } from '@/courses/distanceCategory';
 import type { Selection } from './CourseSelector';
 import { Badge, EmptyState, Panel, Toggle, Tooltip } from './ui';
@@ -14,6 +22,20 @@ import { Badge, EmptyState, Panel, Toggle, Tooltip } from './ui';
  * distance, surface, direction, ground condition, season and weather - so clicking
  * one configures the whole analysis for that cup in a single step.
  */
+const STATE_LABEL: Record<CupState, string> = {
+  completed: 'already run',
+  'running-now': 'running now',
+  announced: 'announced',
+  upcoming: 'upcoming',
+};
+
+const STATE_TONE: Record<CupState, 'neutral' | 'accent' | 'warn' | 'unique'> = {
+  completed: 'neutral',
+  'running-now': 'accent',
+  announced: 'warn',
+  upcoming: 'unique',
+};
+
 export function EventPresets({
   selection,
   onApply,
@@ -22,6 +44,10 @@ export function EventPresets({
   onApply: (s: Selection) => void;
 }) {
   const [showReleased, setShowReleased] = useState(false);
+  // Read the clock only after mount: a static export is prerendered at build time,
+  // so using Date.now() during render would produce a hydration mismatch.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Math.floor(Date.now() / 1000)), []);
 
   const cm = eventPresets.championsMeeting;
   const loh = eventPresets.leagueOfHeroes;
@@ -29,9 +55,13 @@ export function EventPresets({
   const entries = useMemo(() => {
     const list = showReleased
       ? cm.entries
-      : cm.entries.filter((e) => e.status === 'upcoming-on-global');
+      : cm.entries.filter((e) => cupState(e, now) !== 'completed');
     return list.slice().sort((a, b) => a.id - b.id);
-  }, [cm.entries, showReleased]);
+  }, [cm.entries, showReleased, now]);
+
+  const next = useMemo(() => nextCup(now), [now]);
+  const ageDays = dataAgeDays(now);
+  const stale = ageDays != null && ageDays > 30;
 
   const apply = (preset: ChampionsMeetingPreset) => {
     if (preset.courseId == null || preset.surface == null) return;
@@ -53,17 +83,30 @@ export function EventPresets({
       subtitle="Load the exact race setup a Champions Meeting runs under"
       right={
         <Toggle
-          label={showReleased ? 'Showing all cups' : 'Upcoming on Global only'}
+          label={showReleased ? 'Showing all cups' : 'Hiding finished cups'}
           checked={!showReleased}
           onChange={() => setShowReleased(!showReleased)}
         />
       }
     >
-      <p className="mb-3 text-xs text-[var(--color-ink-dim)]">
+      <p className="mb-2 text-xs text-[var(--color-ink-dim)]">
         Global runs the Champions Meeting cups in the same order as the Japanese server, so a cup Japan
-        has already held is a preview of an upcoming Global one. Global has run up to{' '}
-        <strong className="text-[var(--color-ink)]">cup {cm.highestGlobalId}</strong>; the next is{' '}
-        <strong className="text-[var(--color-ink)]">cup {cm.firstUpcomingId ?? '-'}</strong>.
+        has already held is a preview of an upcoming Global one. Next up:{' '}
+        <strong className="text-[var(--color-ink)]">
+          {next ? `cup ${next.id} - ${next.name}` : 'no cup scheduled'}
+        </strong>
+        .
+      </p>
+      <p className="mb-3 text-[11px] text-[var(--color-ink-dim)]">
+        Cup status is worked out from each cup&apos;s own start and end dates, so a finished cup drops
+        off this list on its own. New cups only appear after the game data is refreshed - last fetched{' '}
+        {new Date(dataMeta.dataFetchedAt).toISOString().slice(0, 10)}
+        {ageDays != null && ` (${ageDays} day${ageDays === 1 ? '' : 's'} ago)`}.{' '}
+        {stale && (
+          <span className="text-[var(--color-warn)]">
+            That snapshot is getting old - run `npm run data:refresh` to pick up newly announced cups.
+          </span>
+        )}
       </p>
 
       {entries.length === 0 ? (
@@ -73,6 +116,7 @@ export function EventPresets({
           {entries.map((e) => {
             const active = selection.courseId === e.courseId;
             const band = getDistanceCategory(e.distance);
+            const state = cupState(e, now);
             return (
               <button
                 key={`${e.kind}-${e.id}`}
@@ -96,11 +140,7 @@ export function EventPresets({
                   <Badge>{e.trackCondition}</Badge>
                   <Badge>{e.season}</Badge>
                   {e.weather !== 'sunny' && <Badge tone="warn">{e.weather}</Badge>}
-                  {e.status === 'released-on-global' ? (
-                    <Badge tone="neutral">already run</Badge>
-                  ) : (
-                    <Badge tone="unique">upcoming</Badge>
-                  )}
+                  <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>
                 </div>
               </button>
             );

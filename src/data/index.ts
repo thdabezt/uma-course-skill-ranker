@@ -74,6 +74,41 @@ export interface EventPresets {
 
 export const eventPresets = eventPresetsJson as unknown as EventPresets;
 
+/**
+ * Live status of a cup.
+ *
+ * The stored `status` only records whether Global's own cup list contained the id
+ * when the data was last fetched. GameTora adds a cup to that list when it is
+ * ANNOUNCED, not when it finishes, so membership alone would label an announced
+ * cup as already run. Deriving the real state from the cup's own start/end
+ * timestamps keeps the labels honest even if the data snapshot is a few days old.
+ */
+export type CupState = 'completed' | 'running-now' | 'announced' | 'upcoming';
+
+export function cupState(preset: ChampionsMeetingPreset, nowSeconds: number | null): CupState {
+  if (preset.status === 'upcoming-on-global') return 'upcoming';
+  // Scheduled on Global but we have no clock yet (pre-hydration): fall back to the
+  // snapshot's own classification rather than guessing.
+  if (nowSeconds == null || preset.startsAt == null || preset.endsAt == null) return 'completed';
+  if (preset.endsAt < nowSeconds) return 'completed';
+  if (preset.startsAt > nowSeconds) return 'announced';
+  return 'running-now';
+}
+
+/** The next cup that has not finished yet - announced, running, or predicted. */
+export function nextCup(nowSeconds: number | null): ChampionsMeetingPreset | null {
+  const sorted = eventPresets.championsMeeting.entries.slice().sort((a, b) => a.id - b.id);
+  return sorted.find((c) => cupState(c, nowSeconds) !== 'completed') ?? null;
+}
+
+/** Days since the underlying GameTora payload was fetched. */
+export function dataAgeDays(nowSeconds: number | null): number | null {
+  if (nowSeconds == null) return null;
+  const fetched = Date.parse(dataMeta.dataFetchedAt);
+  if (Number.isNaN(fetched)) return null;
+  return Math.floor((nowSeconds * 1000 - fetched) / 86_400_000);
+}
+
 export const skillsById = new Map(skills.map((s) => [s.id, s]));
 export const coursesById = new Map(courses.map((c) => [c.id, c]));
 export const conditionDocByName = new Map(skillConditionDocs.map((c) => [c.name, c]));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { courses, eventPresets } from '@/data';
+import { courses, cupState, dataAgeDays, eventPresets, nextCup } from '@/data';
 import { GLOBAL_TRACK_IDS } from '@/courses/trackIds';
 
 const cm = eventPresets.championsMeeting;
@@ -71,5 +71,66 @@ describe('League of Heroes', () => {
     expect(eventPresets.leagueOfHeroes.entries).toEqual([]);
     expect(eventPresets.leagueOfHeroes.reason.length).toBeGreaterThan(20);
     expect(eventPresets.leagueOfHeroes.sourceUrl).toContain('league-of-heroes');
+  });
+});
+
+describe('cup state is derived from dates, not just list membership', () => {
+  const base = cm.entries.find((e) => e.id === 16)!; // Leo Cup, already run on Global
+  const DAY = 86_400;
+  const T = 1_800_000_000;
+
+  it('reports a finished cup as completed', () => {
+    const finished = { ...base, startsAt: T - 10 * DAY, endsAt: T - 3 * DAY };
+    expect(cupState(finished, T)).toBe('completed');
+  });
+
+  it('reports a cup that is on right now as running', () => {
+    const live = { ...base, startsAt: T - DAY, endsAt: T + DAY };
+    expect(cupState(live, T)).toBe('running-now');
+  });
+
+  /**
+   * The important case: GameTora adds a cup to Global's list when it is ANNOUNCED,
+   * so a cup can be in that list with a future start date. Membership alone would
+   * wrongly call it "already run".
+   */
+  it('reports an announced but not yet started cup as announced', () => {
+    const announced = { ...base, startsAt: T + 5 * DAY, endsAt: T + 11 * DAY };
+    expect(cupState(announced, T)).toBe('announced');
+    expect(announced.status).toBe('released-on-global');
+  });
+
+  it('reports a cup Global has not scheduled at all as upcoming', () => {
+    const predicted = cm.entries.find((e) => e.status === 'upcoming-on-global')!;
+    expect(cupState(predicted, T)).toBe('upcoming');
+  });
+
+  it('falls back to the snapshot classification before the clock is available', () => {
+    expect(cupState(base, null)).toBe('completed');
+    const predicted = cm.entries.find((e) => e.status === 'upcoming-on-global')!;
+    expect(cupState(predicted, null)).toBe('upcoming');
+  });
+
+  it('picks the next unfinished cup, so a finished cup 17 rolls on to 18', () => {
+    // Every Global cup has ended as of the snapshot, so the next is the first predicted one.
+    const now = Math.floor(Date.now() / 1000);
+    const next = nextCup(now)!;
+    expect(next.id).toBe(17);
+    expect(cupState(next, now)).not.toBe('completed');
+
+    // Simulate cup 17 having been run: the next unfinished cup becomes 18.
+    const after17 = cm.entries
+      .slice()
+      .sort((a, b) => a.id - b.id)
+      .find((c) => c.id > 17 && cupState(c, now) !== 'completed')!;
+    expect(after17.id).toBe(18);
+  });
+
+  it('reports how stale the underlying snapshot is', () => {
+    expect(dataAgeDays(null)).toBeNull();
+    const now = Math.floor(Date.now() / 1000);
+    const age = dataAgeDays(now)!;
+    expect(Number.isFinite(age)).toBe(true);
+    expect(age).toBeGreaterThanOrEqual(0);
   });
 });
