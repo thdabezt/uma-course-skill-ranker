@@ -99,12 +99,13 @@ export function EventPresets({
       </p>
       <p className="mb-3 text-[11px] text-[var(--color-ink-dim)]">
         Cup status is worked out from each cup&apos;s own start and end dates, so a finished cup drops
-        off this list on its own. New cups only appear after the game data is refreshed - last fetched{' '}
+        off this list on its own. New cups arrive with the daily data refresh - last fetched{' '}
         {new Date(dataMeta.dataFetchedAt).toISOString().slice(0, 10)}
         {ageDays != null && ` (${ageDays} day${ageDays === 1 ? '' : 's'} ago)`}.{' '}
         {stale && (
           <span className="text-[var(--color-warn)]">
-            That snapshot is getting old - run `npm run data:refresh` to pick up newly announced cups.
+            That snapshot is older than the refresh schedule should allow, so the scheduled job has
+            probably stopped running - newly announced cups may be missing.
           </span>
         )}
       </p>
@@ -155,7 +156,7 @@ export function EventPresets({
         </div>
         <p className="mt-1 text-[var(--color-ink-dim)]">
           {loh.reason}{' '}
-          <Tooltip label="If GameTora starts publishing a League of Heroes schedule, `npm run data:refresh` will pick it up and presets will appear here automatically.">
+          <Tooltip label="If GameTora starts publishing a League of Heroes schedule, the daily data refresh will pick it up and presets will appear here on their own.">
             <span className="cursor-help underline decoration-dotted">What would change this?</span>
           </Tooltip>
         </p>

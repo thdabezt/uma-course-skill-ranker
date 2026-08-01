@@ -869,7 +869,8 @@ async function main() {
   const SEASON_NAMES = { 1: 'spring', 2: 'summer', 3: 'autumn', 4: 'winter', 5: 'sakura' };
 
   const cupNameEn = (raw) => {
-    if (/^[ -\s!]+$/.test(raw)) return raw;
+    // Printable ASCII means the name is already the English one; leave it alone.
+    if (/^[\x20-\x7e]+$/.test(raw)) return raw;
     for (const [jp, en] of Object.entries(ZODIAC_EN)) {
       if (raw.includes(jp)) return `${en} Cup`;
     }
@@ -919,8 +920,11 @@ async function main() {
 
   const upcomingCm = championsMeetings.filter((c) => c.status === 'upcoming-on-global');
 
+  // Deliberately carries no build timestamp: meta.json already records both
+  // `generatedAt` and `dataFetchedAt`, and a timestamp here would make this file
+  // differ on every rebuild, so the scheduled refresh workflow could never tell a
+  // real data change from a no-op re-run.
   const eventPresets = {
-    generatedAt: new Date().toISOString(),
     note:
       'Champions Meeting cups run in the same order on Global as in Japan (ids 1-16 verified identical), ' +
       'so a cup Japan has already run but Global has not is a genuine preview of an upcoming Global cup.',

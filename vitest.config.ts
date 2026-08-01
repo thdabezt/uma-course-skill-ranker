@@ -11,6 +11,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ["tests/**/*.test.ts"],
+    // Keeps the worker's progress RPC alive between CPU-bound cases - see the
+    // comment in tests/setup.ts.
+    setupFiles: ['./tests/setup.ts'],
     // These suites simulate tens of thousands of races.
     testTimeout: 120000,
     hookTimeout: 120000,

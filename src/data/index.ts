@@ -55,7 +55,8 @@ export interface ChampionsMeetingPreset {
 }
 
 export interface EventPresets {
-  generatedAt: string;
+  // No build timestamp here on purpose - see the note in scripts/build-data.mjs.
+  // meta.json carries `generatedAt` / `dataFetchedAt` for the whole snapshot.
   note: string;
   championsMeeting: {
     available: boolean;

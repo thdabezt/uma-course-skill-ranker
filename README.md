@@ -38,6 +38,9 @@ Then open <http://localhost:3000>.
 
 `data/normalized/` is committed, so the app runs without a network round-trip. `data/raw/` is gitignored and reproducible via `npm run data:fetch`.
 
+You do not have to run `data:refresh` by hand to keep the deployed site current — a
+scheduled workflow does it daily. See [Automatic data refresh](#automatic-data-refresh).
+
 ---
 
 ## Layout
@@ -52,7 +55,8 @@ src/skills/          condition parser, activation analysis, effect handling
 src/ranking/         skill evaluation, skill ranking, character ranking
 src/components/      React UI
 tests/               Vitest suites
-.github/workflows/   ci.yml (typecheck, lint, test), deploy.yml (Pages)
+.github/workflows/   ci.yml (typecheck, lint, test), deploy.yml (Pages),
+                     refresh-data.yml (scheduled upstream data refresh)
 ```
 
 ---
@@ -68,6 +72,26 @@ by the workflow, and empty in `next dev`:
 ```bash
 NEXT_PUBLIC_BASE_PATH=/uma-course-skill-ranker npm run build
 ```
+
+### Automatic data refresh
+
+`.github/workflows/refresh-data.yml` runs daily (and on demand from the Actions tab)
+so newly announced Champions Meeting cups, skills and characters reach the live site
+without anyone running a command:
+
+1. `npm run data:refresh` pulls the current GameTora payloads and re-normalizes them.
+   The fetcher throws if a manifest key it expects has disappeared, so an upstream
+   layout change fails the run instead of shipping partial data.
+2. `data:audit`, `typecheck`, `test` and a full `next build` all have to pass. Bad
+   upstream data cannot reach `main`.
+3. Only then does it commit `data/normalized/` — and only if something actually
+   changed. `meta.json`'s timestamps move on every run, so they alone do not count as
+   a change; that stamp is refreshed on its own once a week to keep the site's "last
+   fetched" line honest.
+4. It then dispatches `deploy.yml`. That last step is explicit because a push made
+   with `GITHUB_TOKEN` deliberately does not trigger other workflows.
+
+Most days it finds nothing and exits without committing.
 
 ---
 

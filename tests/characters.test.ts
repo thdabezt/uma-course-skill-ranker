@@ -85,8 +85,14 @@ describe('skill ranking pipeline', () => {
     }
   });
 
-  it('reports progress and finishes for every running style', () => {
-    for (const style of ['front_runner', 'pace_chaser', 'late_surger', 'end_closer'] as const) {
+  // One case per style rather than one loop over all four. Ranking the full skill
+  // list takes ~13 s, and four of them back-to-back block the vitest worker's event
+  // loop long enough for its progress RPC to the main thread to time out - which
+  // fails the run even though every assertion passed. Separate cases also name the
+  // offending style directly when one breaks.
+  it.each(['front_runner', 'pace_chaser', 'late_surger', 'end_closer'] as const)(
+    'reports progress and finishes for the %s style',
+    (style) => {
       const seen: number[] = [];
       const { ranked } = rankSkills(skills, setupFor(tokyoTurf2400, style), runnerFor(style), (done) =>
         seen.push(done),
@@ -94,8 +100,8 @@ describe('skill ranking pipeline', () => {
       expect(ranked.length).toBe(skills.length);
       expect(seen[seen.length - 1]).toBe(skills.length);
       expect(ranked.some((r) => r.evaluation.canActivate)).toBe(true);
-    }
-  });
+    },
+  );
 
   it('blocks skills restricted to another running style', () => {
     const { ranked } = rankSkills(skills, setupFor(tokyoTurf2400, 'front_runner'), runnerFor('front_runner'));

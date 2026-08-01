@@ -228,8 +228,8 @@ export default function Page() {
             {dataMeta.source.name}
           </a>{' '}
           publishes for its own site. Fetched {new Date(dataMeta.dataFetchedAt).toUTCString()}; normalized{' '}
-          {new Date(dataMeta.generatedAt).toUTCString()}. Refresh with{' '}
-          <code className="text-[var(--color-accent)]">npm run data:refresh</code>.
+          {new Date(dataMeta.generatedAt).toUTCString()}. A scheduled job re-checks the upstream data daily
+          and redeploys this site whenever it changes.
         </p>
         <p>
           <strong className="text-[var(--color-ink)]">Scope:</strong> {dataMeta.counts.courses} racecourses,{' '}

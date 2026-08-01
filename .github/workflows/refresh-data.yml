@@ -1,0 +1,134 @@
+name: Refresh Global game data
+
+on:
+  schedule:
+    # Daily at 03:17 UTC. Champions Meeting cups are announced a few days before
+    # they start, so a daily check picks a new one up promptly. Most runs are a
+    # no-op and exit without committing.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+# Never race the deploy workflow or another refresh.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write # commit refreshed data back to main
+  actions: write # dispatch the deploy workflow afterwards
+
+jobs:
+  refresh:
+    # Skip on forks: they have no Pages site to update.
+    if: github.repository == 'thdabezt/uma-course-skill-ranker'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Pulls the GameTora payloads into data/raw (gitignored) and rebuilds
+      # data/normalized. The fetcher throws if the upstream manifest no longer
+      # has a key it expects, so a layout change fails here instead of silently
+      # shipping stale or partial data.
+      - name: Refresh normalized data
+        run: npm run data:refresh
+
+      - name: Validate the refreshed data
+        run: |
+          npm run data:audit
+          npm run typecheck
+          npm test
+
+      # A data change must not be able to break the site.
+      - name: Verify the site still builds
+        env:
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+        run: npm run build
+
+      - name: Decide whether there is anything to commit
+        id: check
+        run: |
+          git add -A data/normalized
+          # meta.json carries a fetch timestamp that changes on every run, so it
+          # alone is not a reason to commit.
+          CONTENT=$(git diff --cached --name-only -- data/normalized \
+            | grep -v 'data/normalized/meta.json' || true)
+
+          if [ -n "$CONTENT" ]; then
+            echo "reason=content" >> "$GITHUB_OUTPUT"
+            echo "commit=true" >> "$GITHUB_OUTPUT"
+            echo "Changed files:"; echo "$CONTENT"
+            exit 0
+          fi
+
+          # No content change. Still refresh the stamp occasionally so the site's
+          # "last fetched" line does not drift into a false staleness warning.
+          FETCHED=$(node -p "require('./data/normalized/meta.json').dataFetchedAt")
+          AGE_DAYS=$(node -p "Math.floor((Date.now() - Date.parse('$FETCHED')) / 86400000)")
+          echo "No content change; recorded fetch date is $AGE_DAYS day(s) old."
+
+          if [ "$AGE_DAYS" -ge 7 ]; then
+            echo "reason=stamp" >> "$GITHUB_OUTPUT"
+            echo "commit=true" >> "$GITHUB_OUTPUT"
+          else
+            git reset
+            echo "commit=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.commit == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          if [ "${{ steps.check.outputs.reason }}" = 'content' ]; then
+            SUBJECT='chore(data): refresh Global game data'
+          else
+            SUBJECT='chore(data): refresh data snapshot timestamp'
+          fi
+
+          COUNTS=$(node -p "
+            const m = require('./data/normalized/meta.json');
+            const c = m.counts;
+            \`\${c.courses} courses, \${c.skills} skills, \${c.characters} characters, \${c.championsMeetingPresets} cups (\${c.upcomingChampionsMeetings} upcoming)\`;
+          ")
+
+          git commit -m "$SUBJECT" -m "$COUNTS" -m 'Automated by .github/workflows/refresh-data.yml.'
+          git push
+
+      # A push made with GITHUB_TOKEN deliberately does not trigger other
+      # workflows, so deploy.yml has to be dispatched explicitly.
+      - name: Trigger the Pages deploy
+        if: steps.check.outputs.commit == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.check.outputs.commit }}" = 'true' ]; then
+            echo "Data refreshed (${{ steps.check.outputs.reason }}) and a deploy was dispatched." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No change: the Global data already matches upstream." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          node -p "
+            const m = require('./data/normalized/meta.json');
+            const c = m.counts;
+            [
+              '',
+              '| Metric | Value |',
+              '| --- | --- |',
+              \`| Fetched | \${m.dataFetchedAt} |\`,
+              \`| Courses | \${c.courses} |\`,
+              \`| Skills | \${c.skills} |\`,
+              \`| Characters | \${c.characters} |\`,
+              \`| Champions Meeting cups | \${c.championsMeetingPresets} (\${c.upcomingChampionsMeetings} upcoming) |\`,
+            ].join('\n');
+          " >> "$GITHUB_STEP_SUMMARY"
