@@ -25,6 +25,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: this job commits, and rebasing onto a main that moved
+          # mid-run needs a merge base that a shallow clone may not have.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -48,9 +52,12 @@ jobs:
 
       # A data change must not be able to break the site.
       - name: Verify the site still builds
-        env:
-          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
-        run: npm run build
+        # Derived from $GITHUB_REPOSITORY rather than the event payload, which is
+        # not shaped the same way for `schedule` as it is for `push`. This build is
+        # only a gate - deploy.yml produces the artifact that actually ships.
+        run: |
+          export NEXT_PUBLIC_BASE_PATH="/${GITHUB_REPOSITORY#*/}"
+          npm run build
 
       - name: Decide whether there is anything to commit
         id: check
@@ -101,6 +108,8 @@ jobs:
           ")
 
           git commit -m "$SUBJECT" -m "$COUNTS" -m 'Automated by .github/workflows/refresh-data.yml.'
+          # main can move while this run is in flight; rebase rather than fail.
+          git pull --rebase origin main
           git push
 
       # A push made with GITHUB_TOKEN deliberately does not trigger other
