@@ -23,7 +23,10 @@ export interface SimulatedOpponent {
   aptitudeProfile: { surface: Aptitude; distance: Aptitude; style: Aptitude };
   /** Starting gate (1-based). */
   gate: number;
-  /** Frame-by-frame trajectory, shared across every evaluation. */
+  /**
+   * Race summary. `trace` is deliberately emptied once `tracks` has been built -
+   * see the note on `OpponentField.tracks`.
+   */
   result: SimulationResult;
 }
 
@@ -31,8 +34,15 @@ export interface OpponentField {
   key: string;
   seed: number;
   opponents: SimulatedOpponent[];
-  /** Position of every opponent at an elapsed time, index-aligned with `opponents`. */
-  positionsAt: (t: number) => number[];
+  /**
+   * Frame-indexed positions, one array per opponent, index-aligned with `opponents`.
+   *
+   * This is the only trajectory representation kept alive. The full per-frame traces
+   * that produced it are released as soon as it exists: retaining them cost 9.3 MB
+   * per field and 299 MB for a single 3200 m ranking, which dwarfed every other
+   * allocation in the app and made a multi-worker pool impossible.
+   */
+  tracks: Float64Array[];
   /**
    * Position of every opponent at a fixed frame index. Every run uses the same
    * timestep, so frame lookup is an array index instead of a binary search - this
@@ -59,38 +69,28 @@ const DEFAULT_STYLE_MIX: RunningStyle[] = [
 
 const APTITUDES: Aptitude[] = ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
 
-/** Trajectory lookup, memoized per opponent so repeated frames are cheap. */
-function makePositionLookup(results: SimulationResult[]): (t: number) => number[] {
-  return (t: number) =>
-    results.map((r) => {
-      const trace = r.trace;
-      if (!trace.length) return 0;
-      if (t <= trace[0].t) return trace[0].pos;
-      const last = trace[trace.length - 1];
-      if (t >= last.t) return last.pos + (t - last.t) * r.finishSpeed;
-      let lo = 0;
-      let hi = trace.length - 1;
-      while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1;
-        if (trace[mid].t <= t) lo = mid;
-        else hi = mid;
-      }
-      const a = trace[lo];
-      const b = trace[hi];
-      const span = b.t - a.t;
-      return span <= 0 ? a.pos : a.pos + ((t - a.t) / span) * (b.pos - a.pos);
-    });
-}
-
+/**
+ * Bounded because each entry pins 8 full `SimulationResult`s with their traces plus
+ * one `Float64Array` per opponent - tens of megabytes per course. An unbounded map
+ * grew without limit for the lifetime of the tab.
+ *
+ * Eviction is FIFO over whole courses rather than a `clear()` from the app: one
+ * ranking pass reuses the same `EVALUATION.monteCarloRuns` fields across all 653
+ * skills, and clearing mid-pass would throw away exactly the sharing that makes a
+ * ranking affordable. The bound is a comfortable multiple of one pass's worth.
+ */
+const FIELD_CACHE_LIMIT = 40;
 const fieldCache = new Map<string, OpponentField>();
 
 function fieldKey(setup: RaceSetup, player: RunnerStats, seed: number, count: number): string {
+  // Deliberately no weather or season: the field is simulated with an empty skill
+  // list (see `simulateRace(..., [], ...)` below), and the physics never reads
+  // either value - they only ever feed skill *conditions*. Including them made a
+  // weather toggle re-simulate all 8 opponents for a bit-identical result.
   return [
     setup.course.id,
     setup.runningStyle,
     setup.trackCondition,
-    setup.weather,
-    setup.season,
     player.speed,
     player.stamina,
     player.power,
@@ -192,17 +192,27 @@ export function getOpponentField(
   });
   const scratch = new Array<number>(tracks.length);
 
+  // Release the per-frame traces now that `tracks` holds everything anything reads.
+  // A 3200 m field retains 8 opponents x ~2,500 frames of trace objects; keeping them
+  // measured 9.3 MB per field against 160 kB for the Float64Arrays that replace them.
+  for (const o of opponents) o.result = { ...o.result, trace: [] };
+
   const field: OpponentField = {
     key,
     seed,
     opponents,
-    positionsAt: makePositionLookup(results),
+    tracks,
     positionsAtFrame: (frame: number) => {
       const f = frame < 0 ? 0 : frame >= frameCount ? frameCount - 1 : frame;
       for (let i = 0; i < tracks.length; i += 1) scratch[i] = tracks[i][f];
       return scratch;
     },
   };
+  if (fieldCache.size >= FIELD_CACHE_LIMIT) {
+    // Map iteration is insertion-ordered, so the first key is the oldest.
+    const oldest = fieldCache.keys().next();
+    if (!oldest.done) fieldCache.delete(oldest.value);
+  }
   fieldCache.set(key, field);
   return field;
 }

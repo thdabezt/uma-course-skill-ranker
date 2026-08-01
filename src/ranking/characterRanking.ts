@@ -17,13 +17,18 @@ import type { Aptitude, RunningStyle } from '@/simulation/config';
 import type { CharacterCard, RaceSetup, RunnerStats, Skill } from '@/simulation/types';
 import { evaluateSkill, type BaselineContext, type SkillEvaluation } from './skillEvaluation';
 import { blockedEvaluation, tagRestrictionBlockers } from './rankSkills';
+import type { TransportSkillEvaluation } from './transport';
 
 export interface SkillContribution {
   skill: Skill;
   role: 'unique' | 'evolution' | 'innate' | 'awakening';
   countedInScore: boolean;
   expectedHorseLengths: number;
-  evaluation: SkillEvaluation;
+  /**
+   * The display-safe shape. A full `SkillEvaluation` is assignable to it, so the
+   * single-threaded path is unaffected; the worker path supplies the stripped form.
+   */
+  evaluation: TransportSkillEvaluation;
 }
 
 export interface RankedCharacter {
@@ -67,14 +72,23 @@ function evaluateOrCached(
   return evaluation;
 }
 
-export function rankCharacters(
+/**
+ * Ranks characters against an already-computed set of skill evaluations.
+ *
+ * Character ranking is a map lookup - all 872 character skill references resolve in
+ * the Global skill set - so it stays on the main thread even when the skills were
+ * ranked in workers. `evaluate` is the miss path: the single-threaded caller passes
+ * a real evaluator, the worker caller passes nothing, because a miss there must not
+ * silently start a multi-second simulation on the UI thread.
+ */
+export function rankCharactersFrom(
   characters: CharacterCard[],
   skillsById: Map<number, Skill>,
-  ctx: BaselineContext,
-  evaluationCache: Map<number, SkillEvaluation> = new Map(),
+  setup: RaceSetup,
+  runner: RunnerStats,
+  lookup: (skill: Skill) => TransportSkillEvaluation | null,
   onProgress?: (done: number, total: number) => void,
 ): RankedCharacter[] {
-  const { setup, runner } = ctx;
   const out: RankedCharacter[] = [];
 
   characters.forEach((character, index) => {
@@ -85,7 +99,13 @@ export function rankCharacters(
     const addSkill = (id: number, role: SkillContribution['role'], counted: boolean) => {
       const skill = skillsById.get(id);
       if (!skill) return;
-      const evaluation = evaluateOrCached(ctx, skill, runner, setup, evaluationCache);
+      const evaluation = lookup(skill);
+      if (!evaluation) {
+        // Not evaluated and no evaluator available. Say so rather than scoring a 0
+        // that would read as "this skill is worthless on this course".
+        inactive.push({ skill, reason: 'Not evaluated in this run.' });
+        return;
+      }
       contributions.push({
         skill,
         role,
@@ -145,4 +165,25 @@ export function rankCharacters(
   out.sort((a, b) => b.score - a.score);
   onProgress?.(characters.length, characters.length);
   return out;
+}
+
+/**
+ * Single-threaded entry point: evaluates any skill the cache does not already hold.
+ * Unchanged in behaviour from before the worker split.
+ */
+export function rankCharacters(
+  characters: CharacterCard[],
+  skillsById: Map<number, Skill>,
+  ctx: BaselineContext,
+  evaluationCache: Map<number, SkillEvaluation> = new Map(),
+  onProgress?: (done: number, total: number) => void,
+): RankedCharacter[] {
+  return rankCharactersFrom(
+    characters,
+    skillsById,
+    ctx.setup,
+    ctx.runner,
+    (skill) => evaluateOrCached(ctx, skill, ctx.runner, ctx.setup, evaluationCache),
+    onProgress,
+  );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 
 import { courses, trackNames } from '@/data';
 import {
@@ -81,7 +81,7 @@ export function defaultSelection(): Selection {
   };
 }
 
-export function CourseSelector({
+function CourseSelectorImpl({
   selection,
   onChange,
 }: {
@@ -209,3 +209,9 @@ export function CourseSelector({
     </Panel>
   );
 }
+
+/**
+ * Memoized: the page re-renders on every ranking progress tick and on every skill
+ * row expansion, and none of that changes this panel's props.
+ */
+export const CourseSelector = memo(CourseSelectorImpl);

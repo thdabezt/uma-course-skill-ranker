@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import { DEFAULT_RUNNER, type Aptitude, type Mood, type RunnerConfig } from '@/simulation/config';
 import { NumberField, Panel, Select } from './ui';
 
@@ -13,15 +15,23 @@ const MOOD_LABELS: Record<Mood, string> = {
   awful: 'Awful',
 };
 
-export function RunnerPanel({
+function RunnerPanelImpl({
   runner,
   onChange,
 }: {
   runner: RunnerConfig;
   onChange: (r: RunnerConfig) => void;
 }) {
-  const set = <K extends keyof RunnerConfig>(key: K, value: RunnerConfig[K]) =>
+  // Every one of these allocates a new runner object, and a new object identity is
+  // what re-runs the whole ranking. Drop no-op writes at the source.
+  const set = <K extends keyof RunnerConfig>(key: K, value: RunnerConfig[K]) => {
+    if (runner[key] === value) return;
     onChange({ ...runner, [key]: value });
+  };
+
+  const isDefault = (Object.keys(DEFAULT_RUNNER) as (keyof RunnerConfig)[]).every(
+    (k) => k === 'runningStyle' || runner[k] === DEFAULT_RUNNER[k],
+  );
 
   return (
     <Panel
@@ -30,8 +40,9 @@ export function RunnerPanel({
       right={
         <button
           type="button"
+          disabled={isDefault}
           onClick={() => onChange({ ...DEFAULT_RUNNER, runningStyle: runner.runningStyle })}
-          className="rounded-md border border-[var(--color-line)] px-2 py-1 text-xs hover:border-[var(--color-accent)]"
+          className="rounded-md border border-[var(--color-line)] px-2 py-1 text-xs enabled:hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Reset to defaults
         </button>
@@ -84,3 +95,9 @@ export function RunnerPanel({
     </Panel>
   );
 }
+
+/**
+ * Memoized: the page re-renders on every ranking progress tick and on every skill
+ * row expansion, and none of that changes this panel's props.
+ */
+export const RunnerPanel = memo(RunnerPanelImpl);

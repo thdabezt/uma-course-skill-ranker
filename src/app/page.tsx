@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { CharacterRanking } from '@/components/CharacterRanking';
 import { CourseInfo } from '@/components/CourseInfo';
@@ -12,9 +12,11 @@ import { SkillRanking } from '@/components/SkillRanking';
 import type { ActivationOverlay } from '@/components/CourseDiagram';
 import { ErrorState, Spinner, Toggle } from '@/components/ui';
 import { characters, dataMeta, skills, skillsById } from '@/data';
-import { rankCharacters, type RankedCharacter } from '@/ranking/characterRanking';
-import { rankSkills, type RankedSkill } from '@/ranking/rankSkills';
-import type { SkillEvaluation } from '@/ranking/skillEvaluation';
+import { rankCharactersFrom, type RankedCharacter } from '@/ranking/characterRanking';
+import { rankSkills } from '@/ranking/rankSkills';
+import type { TransportSkillEvaluation } from '@/ranking/transport';
+import type { RankedSkillView } from '@/worker/rankingProtocol';
+import { RankingPool, workersSupported } from '@/worker/rankingPool';
 import { DEFAULT_RUNNER, SIMULATION, type RunnerConfig } from '@/simulation/config';
 import { conditionNames } from '@/skills/conditionParser';
 import type { RaceSetup, RunnerStats } from '@/simulation/types';
@@ -35,24 +37,111 @@ const COURSE_CONDITIONS = new Set([
 ]);
 
 interface Computed {
-  rankedSkills: RankedSkill[];
+  rankedSkills: RankedSkillView[];
   rankedCharacters: RankedCharacter[];
   baselineFinishTime: number;
 }
 
+/**
+ * Trailing debounce before a ranking starts.
+ *
+ * Long enough to swallow a stepper drag or a retyped stat, short enough that a
+ * deliberate click on a racecourse still feels immediate.
+ */
+const COMPUTE_DEBOUNCE_MS = 250;
+
+/**
+ * A ranking is a pure function of (race setup, runner), so switching back to a
+ * previous setup can be free. Kept small: each entry holds all 653 evaluations with
+ * their full per-sample debug payload, which is what the details panel renders.
+ */
+const RESULT_CACHE_LIMIT = 6;
+
+function computeKey(setup: RaceSetup, runner: RunnerStats): string {
+  return [
+    setup.course.id,
+    setup.runningStyle,
+    setup.trackCondition,
+    setup.weather,
+    setup.season,
+    runner.speed,
+    runner.stamina,
+    runner.power,
+    runner.guts,
+    runner.wit,
+    runner.mood,
+    runner.distanceAptitude,
+    runner.surfaceAptitude,
+    runner.styleAptitude,
+    runner.skillActivationRate,
+    runner.startDelaySeconds,
+    runner.postNumber,
+    runner.popularity,
+  ].join('|');
+}
+
 export default function Page() {
   const [selection, setSelection] = useState<Selection>(() => defaultSelection());
+  /**
+   * Which event preset produced the current setup, if any.
+   *
+   * Stored rather than derived: the cup schedule reuses racecourses, and cups 31 and
+   * 46 are identical in every race field, so no comparison against `selection` can
+   * distinguish them. The stored setup is kept alongside the key so the highlight
+   * heals itself - any hand edit in the course selector stops matching and the badge
+   * clears without needing an explicit reset on every code path that edits the setup.
+   */
+  const [appliedPreset, setAppliedPreset] = useState<{ key: string; setup: Selection } | null>(null);
   const [runner, setRunner] = useState<RunnerConfig>(DEFAULT_RUNNER);
   const [tab, setTab] = useState<'skills' | 'characters'>('skills');
   const [showDev, setShowDev] = useState(false);
   const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
 
   const [computing, setComputing] = useState(true);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<Computed | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
+  const cache = useRef(new Map<string, Computed>());
+  const pool = useRef<RankingPool | null>(null);
+
+  // Workers are created after mount: `output: 'export'` prerenders this page in
+  // Node, where `Worker` does not exist. The pool itself spawns its threads lazily
+  // on the first ranking.
+  useEffect(() => {
+    if (!workersSupported()) return;
+    const created = new RankingPool();
+    pool.current = created;
+    return () => {
+      created.dispose();
+      if (pool.current === created) pool.current = null;
+    };
+  }, []);
+
   const course = resolveSelection(selection);
+
+  const applyPreset = useCallback((next: Selection, key: string) => {
+    setSelection(next);
+    setAppliedPreset({ key, setup: next });
+  }, []);
+
+  /** The preset only counts as applied while every field it set still holds. */
+  const appliedPresetKey = useMemo(() => {
+    if (!appliedPreset) return null;
+    const owned: (keyof Selection)[] = [
+      'trackName',
+      'surface',
+      'distance',
+      'courseId',
+      'trackCondition',
+      'weather',
+      'season',
+    ];
+    // Deliberately not runningStyle: applying a preset never sets it, so changing it
+    // must not clear the badge.
+    return owned.every((k) => appliedPreset.setup[k] === selection[k]) ? appliedPreset.key : null;
+  }, [appliedPreset, selection]);
 
   const setup: RaceSetup | null = useMemo(
     () =>
@@ -79,29 +168,99 @@ export default function Page() {
       setComputing(false);
       return;
     }
-    let cancelled = false;
-    setComputing(true);
-    setError(null);
 
-    // Yield a frame so the loading state paints before the (synchronous) simulation runs.
-    const handle = setTimeout(() => {
-      try {
-        const { ranked, baseline } = rankSkills(skills, setup, runnerStats);
-        const cache = new Map<number, SkillEvaluation>();
-        for (const r of ranked) cache.set(r.skill.id, r.evaluation);
-        const rankedCharacters = rankCharacters(characters, skillsById, baseline, cache);
-        if (cancelled) return;
-        setResult({
-          rankedSkills: ranked,
-          rankedCharacters,
-          baselineFinishTime: baseline.baseline.finishTimeSeconds,
-        });
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!cancelled) setComputing(false);
+    const key = computeKey(setup, runnerStats);
+    const hit = cache.current.get(key);
+    if (hit) {
+      // Re-insert so the most recently used entry is the last to be evicted.
+      cache.current.delete(key);
+      cache.current.set(key, hit);
+      setResult(hit);
+      setComputing(false);
+      setError(null);
+      setProgress(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    /** Assembles the final view from ranked rows, whichever path produced them. */
+    const finish = (rows: RankedSkillView[], baselineFinishTime: number) => {
+      const byId = new Map<number, TransportSkillEvaluation>();
+      for (const r of rows) byId.set(r.skill.id, r.evaluation);
+      const rankedCharacters = rankCharactersFrom(
+        characters,
+        skillsById,
+        setup,
+        runnerStats,
+        (skill) => byId.get(skill.id) ?? null,
+      );
+      const computed: Computed = {
+        rankedSkills: rows,
+        rankedCharacters,
+        baselineFinishTime,
+      };
+      cache.current.set(key, computed);
+      while (cache.current.size > RESULT_CACHE_LIMIT) {
+        const oldest = cache.current.keys().next();
+        if (oldest.done) break;
+        cache.current.delete(oldest.value);
       }
-    }, 16);
+      if (cancelled) return;
+      setResult(computed);
+      setProgress(null);
+      setComputing(false);
+    };
+
+    const fail = (e: unknown) => {
+      if (cancelled) return;
+      // A superseded job is not an error the user should see.
+      if (e instanceof Error && e.message === 'superseded') return;
+      setError(e instanceof Error ? e.message : String(e));
+      setProgress(null);
+      setComputing(false);
+    };
+
+    // Trailing debounce. Dragging a stepper or retyping a stat used to submit every
+    // intermediate value, and because the main thread was blocked the browser
+    // replayed the buffered events, chaining the freezes end to end.
+    const handle = setTimeout(() => {
+      setComputing(true);
+      setError(null);
+      setProgress({ done: 0, total: skills.length });
+
+      const onProgress = (done: number, total: number) => {
+        if (!cancelled) setProgress({ done, total });
+      };
+
+      if (pool.current) {
+        pool.current
+          .run(setup, runnerStats, skills.length, onProgress)
+          .then(({ rows, baselineFinishTimeSeconds }) => {
+            if (cancelled) return;
+            const view: RankedSkillView[] = [];
+            for (const row of rows) {
+              const skill = skillsById.get(row.skillId);
+              if (skill) view.push({ skill, evaluation: row.evaluation });
+            }
+            view.sort(
+              (a, b) => b.evaluation.expectedHorseLengths - a.evaluation.expectedHorseLengths,
+            );
+            finish(view, baselineFinishTimeSeconds);
+          })
+          .catch(fail);
+        return;
+      }
+
+      // No Worker in this environment: run it inline, as before. Still blocking, but
+      // correct - and this path is the reference the worker path is tested against.
+      try {
+        const { ranked, baseline } = rankSkills(skills, setup, runnerStats, onProgress);
+        finish(ranked, baseline.baseline.finishTimeSeconds);
+      } catch (e) {
+        fail(e);
+      }
+    }, COMPUTE_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
@@ -171,7 +330,11 @@ export default function Page() {
       </header>
 
       <CourseSelector selection={selection} onChange={setSelection} />
-      <EventPresets selection={selection} onApply={setSelection} />
+      <EventPresets
+        selection={selection}
+        appliedPresetKey={appliedPresetKey}
+        onApply={applyPreset}
+      />
       <RunnerPanel runner={runner} onChange={setRunner} />
 
       {error && (
@@ -196,7 +359,9 @@ export default function Page() {
         <Toggle label="Character ranking" checked={tab === 'characters'} onChange={() => setTab('characters')} />
       </div>
 
-      {computing && <Spinner label="Running the race simulation for every Global skill..." />}
+      {computing && (
+        <Spinner label="Running the race simulation for every Global skill..." progress={progress} />
+      )}
 
       {!computing && result && tab === 'skills' && (
         <SkillRanking

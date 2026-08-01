@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 
 import {
+  coursesById,
   cupState,
   dataAgeDays,
   dataMeta,
@@ -36,12 +37,22 @@ const STATE_TONE: Record<CupState, 'neutral' | 'accent' | 'warn' | 'unique'> = {
   upcoming: 'unique',
 };
 
-export function EventPresets({
+/**
+ * Stable identity for a cup. The schedule reuses racecourses heavily - 10 of the 23
+ * distinct course ids are shared by more than one cup, and cups 31 and 46 are
+ * identical in every field except this id - so nothing derived from the race setup
+ * can tell two presets apart. Only the preset's own identity can.
+ */
+export const presetKey = (p: ChampionsMeetingPreset) => `${p.kind}-${p.id}`;
+
+function EventPresetsImpl({
   selection,
+  appliedPresetKey,
   onApply,
 }: {
   selection: Selection;
-  onApply: (s: Selection) => void;
+  appliedPresetKey: string | null;
+  onApply: (s: Selection, key: string) => void;
 }) {
   const [showReleased, setShowReleased] = useState(false);
   // Read the clock only after mount: a static export is prerendered at build time,
@@ -52,11 +63,19 @@ export function EventPresets({
   const cm = eventPresets.championsMeeting;
   const loh = eventPresets.leagueOfHeroes;
 
+  // Resolve each cup's state, distance band and usability once here, rather than
+  // re-deriving them inside the render map on every unrelated parent render.
   const entries = useMemo(() => {
-    const list = showReleased
-      ? cm.entries
-      : cm.entries.filter((e) => cupState(e, now) !== 'completed');
-    return list.slice().sort((a, b) => a.id - b.id);
+    const rows = cm.entries.map((preset) => ({
+      preset,
+      key: presetKey(preset),
+      state: cupState(preset, now),
+      band: getDistanceCategory(preset.distance),
+      // A cup whose course could not be resolved cannot configure anything.
+      usable: preset.courseId != null && preset.surface != null,
+    }));
+    const list = showReleased ? rows : rows.filter((r) => r.state !== 'completed');
+    return list.sort((a, b) => a.preset.id - b.preset.id);
   }, [cm.entries, showReleased, now]);
 
   const next = useMemo(() => nextCup(now), [now]);
@@ -65,16 +84,23 @@ export function EventPresets({
 
   const apply = (preset: ChampionsMeetingPreset) => {
     if (preset.courseId == null || preset.surface == null) return;
-    onApply({
-      ...selection,
-      trackName: preset.courseName?.split(' ')[0] ?? selection.trackName,
-      surface: preset.surface,
-      distance: preset.distance,
-      courseId: preset.courseId,
-      trackCondition: preset.trackCondition,
-      weather: preset.weather,
-      season: preset.season,
-    });
+    onApply(
+      {
+        ...selection,
+        // From the course record, not `courseName.split(' ')[0]`. That only worked
+        // because every current track name happens to be one word; a two-word name
+        // would produce a trackName matching no course and silently empty the
+        // Surface / Distance / Layout dropdowns.
+        trackName: coursesById.get(preset.courseId)?.trackName ?? selection.trackName,
+        surface: preset.surface,
+        distance: preset.distance,
+        courseId: preset.courseId,
+        trackCondition: preset.trackCondition,
+        weather: preset.weather,
+        season: preset.season,
+      },
+      presetKey(preset),
+    );
   };
 
   return (
@@ -114,20 +140,21 @@ export function EventPresets({
         <EmptyState title="No cups to show" hint="Turn off the upcoming-only filter." />
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((e) => {
-            const active = selection.courseId === e.courseId;
-            const band = getDistanceCategory(e.distance);
-            const state = cupState(e, now);
+          {entries.map(({ preset: e, key, state, band, usable }) => {
+            const active = appliedPresetKey === key;
             return (
               <button
-                key={`${e.kind}-${e.id}`}
+                key={key}
                 type="button"
                 onClick={() => apply(e)}
+                disabled={!usable}
                 aria-pressed={active}
                 className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                  active
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10'
-                    : 'border-[var(--color-line)] bg-[var(--color-panel-2)] hover:border-[var(--color-accent)]/60'
+                  !usable
+                    ? 'cursor-not-allowed border-[var(--color-line)] bg-[var(--color-panel-2)] opacity-60'
+                    : active
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10'
+                      : 'border-[var(--color-line)] bg-[var(--color-panel-2)] hover:border-[var(--color-accent)]/60'
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-2">
@@ -142,6 +169,7 @@ export function EventPresets({
                   <Badge>{e.season}</Badge>
                   {e.weather !== 'sunny' && <Badge tone="warn">{e.weather}</Badge>}
                   <Badge tone={STATE_TONE[state]}>{STATE_LABEL[state]}</Badge>
+                  {!usable && <Badge tone="bad">course not in the Global data</Badge>}
                 </div>
               </button>
             );
@@ -164,3 +192,9 @@ export function EventPresets({
     </Panel>
   );
 }
+
+/**
+ * Memoized: the page re-renders on every ranking progress tick and on every skill
+ * row expansion, and none of that changes this panel's props.
+ */
+export const EventPresets = memo(EventPresetsImpl);

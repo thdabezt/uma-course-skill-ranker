@@ -1,14 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
 import { conditionDocByName } from '@/data';
 import { EFFICIENCY_SP_BASIS, SIMULATION } from '@/simulation/config';
 import { GLOBAL_DATA_VERSION } from '@/simulation/globalVersion';
-import type { RankedSkill } from '@/ranking/rankSkills';
+import type { RankedSkillView } from '@/worker/rankingProtocol';
 import { describeEffect } from '@/skills/effects';
 import { conditionNames } from '@/skills/conditionParser';
 import { Badge, EmptyState, ExternalLink, Panel, Toggle, Tooltip } from './ui';
+
+/** Rows added per "show more". Enough to fill a tall screen without a huge commit. */
+const PAGE_SIZE = 50;
 
 export type SkillSortKey = 'expected' | 'activated' | 'efficiency' | 'probability' | 'cost';
 
@@ -93,7 +96,7 @@ function ConditionText({ expression }: { expression: string }) {
   );
 }
 
-function DebugBreakdown({ item }: { item: RankedSkill }) {
+function DebugBreakdown({ item }: { item: RankedSkillView }) {
   const { evaluation, skill } = item;
   return (
     <div className="space-y-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] p-3 text-xs">
@@ -261,7 +264,7 @@ export function SkillRanking({
   selectedSkillId,
   onSelectSkill,
 }: {
-  ranked: RankedSkill[];
+  ranked: RankedSkillView[];
   selectedSkillId?: number | null;
   onSelectSkill?: (id: number | null) => void;
 }) {
@@ -275,11 +278,26 @@ export function SkillRanking({
   const expanded = selectedSkillId ?? null;
   const setExpanded = (id: number | null) => onSelectSkill?.(id);
 
+  /**
+   * How many rows are actually in the DOM.
+   *
+   * Rendering every filtered row put ~360 rows and ~10,600 elements on the page -
+   * 91% of the document - and every unrelated state change had to reconcile all of
+   * them. The table is sorted by value and people read the top of it, so a
+   * "show more" control costs nothing in practice. The in-panel search is the
+   * discovery path for anything further down.
+   */
+  const [visible, setVisible] = useState(PAGE_SIZE);
+
+  // A deferred query keeps typing responsive: the filter below lowercases the name
+  // and description of every skill, and React can now paint the keystroke first.
+  const deferredSearch = useDeferredValue(search);
+
   const toggle = (list: string[], set: (v: string[]) => void, key: string) =>
     set(list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
 
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     let list = ranked.filter((r) => {
       if (hideInactive && !r.evaluation.canActivate) return false;
       if (q && !r.skill.name.toLowerCase().includes(q) && !r.skill.description.toLowerCase().includes(q))
@@ -295,7 +313,7 @@ export function SkillRanking({
 
     const dir = ascending ? 1 : -1;
     list = list.slice().sort((a, b) => {
-      const pick = (r: RankedSkill): number => {
+      const pick = (r: RankedSkillView): number => {
         switch (sortKey) {
           case 'activated':
             return r.evaluation.activatedBashin;
@@ -312,7 +330,21 @@ export function SkillRanking({
       return (pick(a) - pick(b)) * dir;
     });
     return list;
-  }, [ranked, search, sortKey, ascending, effectFilters, rarityFilters, hideInactive, hideInherited]);
+  }, [
+    ranked,
+    deferredSearch,
+    sortKey,
+    ascending,
+    effectFilters,
+    rarityFilters,
+    hideInactive,
+    hideInherited,
+  ]);
+
+  const shown = useMemo(() => rows.slice(0, visible), [rows, visible]);
+
+  // Any change to the filtered set starts the window over at the top.
+  useEffect(() => setVisible(PAGE_SIZE), [rows]);
 
   return (
     <Panel
@@ -436,7 +468,7 @@ export function SkillRanking({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => {
+              {shown.map((r, i) => {
                 const e = r.evaluation;
                 const open = expanded === r.skill.id;
                 return (
@@ -531,6 +563,27 @@ export function SkillRanking({
               })}
             </tbody>
           </table>
+          {rows.length > shown.length && (
+            <div className="flex items-center justify-center gap-3 border-t border-[var(--color-line)]/60 py-3 text-xs">
+              <span className="text-[var(--color-ink-dim)]">
+                Showing {shown.length} of {rows.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setVisible((v) => v + PAGE_SIZE)}
+                className="rounded-md border border-[var(--color-line)] px-2 py-1 hover:border-[var(--color-accent)]"
+              >
+                Show {Math.min(PAGE_SIZE, rows.length - shown.length)} more
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisible(rows.length)}
+                className="rounded-md border border-[var(--color-line)] px-2 py-1 hover:border-[var(--color-accent)]"
+              >
+                Show all {rows.length}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </Panel>

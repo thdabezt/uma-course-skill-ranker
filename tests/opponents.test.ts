@@ -51,7 +51,9 @@ describe('opponent field', () => {
     const setup = setupFor(tokyoTurf2400);
     const runner = runnerFor();
     const field = getOpponentField(setup, runner, 4321);
-    const before = field.opponents.map((o) => o.result.trace.map((p) => p.pos));
+    // Assert on `tracks`, which is what the simulator actually reads through
+    // `positionsAtFrame`. The full traces are released once tracks exist.
+    const before = field.tracks.map((t) => Array.from(t));
 
     const skill = findSkill('Dream Run');
     simulateRace(
@@ -73,7 +75,7 @@ describe('opponent field', () => {
       },
     );
 
-    expect(field.opponents.map((o) => o.result.trace.map((p) => p.pos))).toEqual(before);
+    expect(field.tracks.map((t) => Array.from(t))).toEqual(before);
     expect(getOpponentField(setup, runner, 4321)).toBe(field);
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 export function Panel({
   title,
@@ -78,6 +78,56 @@ export function NumberField({
   step?: number;
 }) {
   const id = useId();
+  /**
+   * A local draft, committed on a short idle or on blur / Enter.
+   *
+   * Raising this value re-runs the whole race simulation, so submitting every
+   * intermediate keystroke was expensive and wrong: typing "1200" into an empty box
+   * used to submit 0, 1, 12, 120 and 1200 - five full rankings, four of them
+   * discarded, and the first of them a simulation of a 0-Speed runner, because
+   * `Number('')` is 0. Holding a stepper arrow auto-repeats at ~30 Hz.
+   *
+   * Idle-commit rather than blur-only so the stepper arrows still feel live.
+   */
+  const [draft, setDraft] = useState(() => String(value));
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Follow the value when it changes from outside (the Reset button, a preset).
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = useCallback(
+    (raw: string) => {
+      const parsed = Number(raw);
+      if (raw.trim() === '' || !Number.isFinite(parsed)) return;
+      // HTML number inputs do not clamp typed values, only stepped ones.
+      const clamped = Math.min(max, Math.max(min, parsed));
+      if (clamped !== value) onChange(clamped);
+    },
+    [max, min, onChange, value],
+  );
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const onDraft = (raw: string) => {
+    setDraft(raw);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => commit(raw), 400);
+  };
+
+  const flush = () => {
+    if (timer.current) clearTimeout(timer.current);
+    const parsed = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(parsed)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    setDraft(String(clamped));
+    commit(draft);
+  };
+
+  const pending = draft !== String(value);
+
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium text-[var(--color-ink-dim)]">
@@ -86,13 +136,29 @@ export function NumberField({
       <input
         id={id}
         type="number"
-        value={value}
+        value={draft}
         min={min}
         max={max}
         step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-panel-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
+        onChange={(e) => onDraft(e.target.value)}
+        onBlur={flush}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') flush();
+          else if (e.key === 'Escape') {
+            if (timer.current) clearTimeout(timer.current);
+            setDraft(String(value));
+          }
+        }}
+        aria-describedby={pending ? `${id}-pending` : undefined}
+        className={`w-full rounded-md border bg-[var(--color-panel-2)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)] ${
+          pending ? 'border-[var(--color-warn)]' : 'border-[var(--color-line)]'
+        }`}
       />
+      {pending && (
+        <span id={`${id}-pending`} className="sr-only">
+          Not applied yet. Press Enter or move focus away to apply.
+        </span>
+      )}
     </div>
   );
 }
@@ -229,11 +295,39 @@ export function ExternalLink({
   );
 }
 
-export function Spinner({ label }: { label: string }) {
+export function Spinner({
+  label,
+  progress,
+}: {
+  label: string;
+  /** When given, shows real progress instead of an indeterminate spinner. */
+  progress?: { done: number; total: number } | null;
+}) {
+  const pct =
+    progress && progress.total > 0
+      ? Math.min(100, Math.round((progress.done / progress.total) * 100))
+      : null;
   return (
-    <div className="flex items-center gap-3 py-10 text-sm text-[var(--color-ink-dim)]" role="status">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-line)] border-t-[var(--color-accent)]" />
-      {label}
+    <div className="py-10 text-sm text-[var(--color-ink-dim)]" role="status">
+      <div className="flex items-center gap-3">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-line)] border-t-[var(--color-accent)]" />
+        {label}
+        {pct !== null && <span className="tabular-nums text-[var(--color-ink)]">{pct}%</span>}
+      </div>
+      {pct !== null && (
+        <div
+          className="mt-3 h-1 w-full max-w-md overflow-hidden rounded-full bg-[var(--color-panel-2)]"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={progress!.total}
+          aria-valuenow={progress!.done}
+        >
+          <div
+            className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-150"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

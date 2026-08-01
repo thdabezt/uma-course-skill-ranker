@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import { DISTANCE_CATEGORY_LABELS } from '@/courses/distanceCategory';
 import { summarizeCourse } from '@/courses/sections';
 import type { Course, Skill } from '@/simulation/types';
@@ -16,7 +18,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   return hint ? <Tooltip label={hint}>{body}</Tooltip> : body;
 }
 
-export function CourseInfo({
+function CourseInfoImpl({
   course,
   baselineFinishTime,
   greenSkills,
@@ -123,3 +125,9 @@ export function CourseInfo({
     </Panel>
   );
 }
+
+/**
+ * Memoized: the page re-renders on every ranking progress tick and on every skill
+ * row expansion, and none of that changes this panel's props.
+ */
+export const CourseInfo = memo(CourseInfoImpl);
