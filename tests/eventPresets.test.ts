@@ -9,8 +9,11 @@ describe('Champions Meeting presets', () => {
   it('exposes cups and knows where Global has got to', () => {
     expect(cm.available).toBe(true);
     expect(cm.entries.length).toBeGreaterThan(30);
-    expect(cm.highestGlobalId).toBe(16);
-    expect(cm.firstUpcomingId).toBe(17);
+    // The snapshot moves on with every daily refresh, so check consistency, not a fixed cup.
+    const released = cm.entries.filter((e) => e.status === 'released-on-global').map((e) => e.id);
+    expect(released.length).toBeGreaterThanOrEqual(16);
+    expect(cm.highestGlobalId).toBe(Math.max(...released));
+    expect(cm.firstUpcomingId).toBe(cm.highestGlobalId + 1);
   });
 
   it('marks cups Global has already run as released and the rest as upcoming', () => {
@@ -111,19 +114,20 @@ describe('cup state is derived from dates, not just list membership', () => {
     expect(cupState(predicted, null)).toBe('upcoming');
   });
 
-  it('picks the next unfinished cup, so a finished cup 17 rolls on to 18', () => {
-    // Every Global cup has ended as of the snapshot, so the next is the first predicted one.
+  it('picks the next unfinished cup, and a finished cup rolls on to the following one', () => {
     const now = Math.floor(Date.now() / 1000);
+    const sorted = cm.entries.slice().sort((a, b) => a.id - b.id);
     const next = nextCup(now)!;
-    expect(next.id).toBe(17);
     expect(cupState(next, now)).not.toBe('completed');
+    // Nothing before it is still open.
+    for (const c of sorted) {
+      if (c.id < next.id) expect(cupState(c, now)).toBe('completed');
+    }
 
-    // Simulate cup 17 having been run: the next unfinished cup becomes 18.
-    const after17 = cm.entries
-      .slice()
-      .sort((a, b) => a.id - b.id)
-      .find((c) => c.id > 17 && cupState(c, now) !== 'completed')!;
-    expect(after17.id).toBe(18);
+    // Once the next cup has been run, the following listed cup takes its place.
+    const following = sorted.find((c) => c.id > next.id)!;
+    const after = sorted.find((c) => c.id > next.id && cupState(c, now) !== 'completed')!;
+    expect(after.id).toBe(following.id);
   });
 
   it('reports how stale the underlying snapshot is', () => {
