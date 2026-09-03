@@ -21,6 +21,8 @@ export interface CornerSection extends Section {
 
 export interface StraightSection extends Section {
   kind: string;
+  /** Game value: 1 = home straight (in front of the stands), 2 = back straight, 3 = other. */
+  frontType: number;
 }
 
 export interface SlopeSection extends Section {
@@ -63,6 +65,10 @@ export interface SkillEffect {
   kind: string;
   rawType: number;
   rawValue: number;
+  /** uma-skill-tools SkillTarget id: 1 = owner, 2 = everyone, other = other runners. */
+  target: number;
+  /** Game modifier-scaling mode (1 = fixed value). */
+  scaling: number;
 }
 
 export interface SkillConditionGroup {
@@ -71,6 +77,8 @@ export interface SkillConditionGroup {
   /** -1 means a permanent (passive) effect. */
   baseDurationSeconds: number;
   cooldownSeconds: number | null;
+  /** Game duration-scaling mode (1 = fixed duration). */
+  durationScaling: number;
   effects: SkillEffect[];
 }
 
@@ -106,6 +114,12 @@ export interface Skill {
   isDebuff: boolean;
   /** Always false in the shipped data: negative skills are dropped at normalization. */
   isNegativeSkill: false;
+  /** Whether the Wit activation roll applies to this skill. */
+  wisdomCheck: boolean;
+  /** Provenance of the engine-only fields. */
+  engineSource: 'uma-tools' | 'inferred';
+  /** Numeric game tag ids; `[-1]` when unknown upstream. */
+  engineTags: number[];
   isInheritedUnique: boolean;
   /** The unique skill this inheritable copy comes from. */
   inheritedFromSkillId: number | null;
@@ -187,63 +201,4 @@ export interface RunnerStats {
   startDelaySeconds: number;
   postNumber: number;
   popularity: number;
-}
-
-/** State a skill predicate can read when deciding whether to fire. */
-export interface ConditionContext {
-  position: number;
-  timeSeconds: number;
-  phase: number;
-  hpFraction: number;
-  isLastSpurt: boolean;
-  relative: import('./raceEvents').RaceRelativeState;
-  events: import('./raceEvents').RaceEventHistory;
-}
-
-/** An effect instance scheduled into the simulation. */
-export interface ScheduledEffect {
-  skillId: number;
-  /** Metres from the start line where the effect begins (positional triggers). */
-  activateAtMeters: number;
-  /** Duration in seconds; `Infinity` for passives applied from the gate. */
-  durationSeconds: number;
-  effects: SkillEffect[];
-  /**
-   * Event-driven trigger. When present the effect fires at the first frame inside
-   * [windowStart, windowEnd) where `predicate` is true, instead of at a fixed
-   * position. This is what makes overtake / rank / nearby-runner skills activate at
-   * the position the event actually happened.
-   */
-  trigger?: {
-    windowStart: number;
-    windowEnd: number;
-    predicate: (ctx: ConditionContext) => boolean;
-  };
-}
-
-export interface SimulationResult {
-  finishTimeSeconds: number;
-  finished: boolean;
-  /** Travel speed as the finish line was crossed. */
-  finishSpeed: number;
-  /** Lowest HP fraction reached during the race. */
-  minHpFraction: number;
-  ranOutOfStamina: boolean;
-  /** HP left at the finish, as a share of max HP. */
-  hpRemainingFraction: number;
-  /** Where the last spurt began, or null when the final leg was never reached. */
-  spurtStartMeters: number | null;
-  spurtSpeed: number | null;
-  /** True when the runner could afford a full-speed spurt for the whole final leg. */
-  fullSpurt: boolean;
-  startDelaySeconds: number;
-  seed: number;
-  /** Seconds each scheduled effect was actually inside the race. */
-  effectiveDurationSeconds: Record<number, number>;
-  /** Seconds each scheduled effect was cut short by the finish line, or never fired. */
-  wastedDurationSeconds: Record<number, number>;
-  /** Where each effect actually fired (absent when the Wit proc roll failed). */
-  activationPositions: Record<number, number>;
-  /** Per-frame (time, position) samples; only populated when requested. */
-  trace: { t: number; pos: number }[];
 }

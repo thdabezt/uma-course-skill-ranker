@@ -9,3 +9,6 @@ next-env.d.ts
 # Raw upstream payloads are large and reproducible via `npm run data:fetch`.
 data/raw/*.json
 !data/raw/.gitkeep
+
+# Engine metadata mirrored from alpha123/uma-tools by `npm run data:fetch`.
+data/raw/uma-tools/

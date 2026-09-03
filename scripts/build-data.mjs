@@ -42,6 +42,15 @@ const GLOBAL_SERVER = 'en';
 const SOURCE = 'https://gametora.com/umamusume';
 
 const readRaw = async (f) => JSON.parse(await readFile(path.join(RAW, f), 'utf8'));
+/** Optional payload: an absent file yields null instead of failing the build. */
+const readRawOptional = async (f) => {
+  try {
+    return await readRaw(f);
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return null;
+    throw e;
+  }
+};
 
 /* ------------------------------------------------------------------ enums */
 
@@ -52,7 +61,18 @@ const SURFACE = { 1: 'turf', 2: 'dirt' };
 const DIRECTION = { 1: 'right', 2: 'left', 4: 'straight' };
 
 /** GameTora `inout` course-layout variant. */
-const LAYOUT = { 1: 'inner', 2: 'outer', 3: 'inner-outer', 4: 'outer-inner' };
+/*
+ * Verified against umalator's `inoutKey = ['', 'none', 'inner', 'outer', 'outin']`
+ * (uma-tools components/RaceTrack.tsx) and the real JRA layouts: Kyoto 1200 / 2000
+ * and Nakayama 1800 / 2000 / 2500 run on the inner track and carry inout 2; Kyoto
+ * 1800 / 2200 / 2400 / 3000 and Nakayama 1200 / 1600 / 2200 run on the outer track
+ * and carry inout 3; Hanshin 3200 starts on the outer loop and finishes on the
+ * inner one (inout 4). Racecourses with a single layout use 1.
+ */
+const LAYOUT = { 1: 'standard', 2: 'inner', 3: 'outer', 4: 'outer-inner' };
+
+/** Suffix appended to a course name so layout variants of one distance stay distinct. */
+const LAYOUT_NAME_SUFFIX = { inner: ' (inner)', outer: ' (outer)', 'outer-inner': ' (outer to inner)' };
 
 // Distance classification comes from src/courses/distanceCategory.ts. GameTora's
 // own numeric enum is kept only as a cross-check (GAMETORA_DISTANCE_ENUM).
@@ -161,6 +181,14 @@ const EffectSchema = z.object({
   kind: z.string().min(1),
   rawType: z.number().int(),
   rawValue: z.number(),
+  /**
+   * uma-skill-tools SkillTarget id: 1 = the skill's owner, 2 = everyone, any other
+   * value = other runners only (debuff). Decides which effects the engine applies
+   * to the simulated runner.
+   */
+  target: z.number().int(),
+  /** Game modifier-scaling mode (1 = fixed value); see RaceSolver.getScaledModifier. */
+  scaling: z.number().int(),
 });
 
 const ConditionGroupSchema = z.object({
@@ -168,6 +196,8 @@ const ConditionGroupSchema = z.object({
   precondition: z.string().nullable(),
   baseDurationSeconds: z.number(),
   cooldownSeconds: z.number().nullable(),
+  /** Game duration-scaling mode (1 = fixed duration); see RaceSolver.getScaledDuration. */
+  durationScaling: z.number().int(),
   effects: z.array(EffectSchema).min(1),
 });
 
@@ -198,6 +228,16 @@ const SkillSchema = z.object({
   isPassive: z.boolean(),
   isDebuff: z.boolean(),
   isNegativeSkill: z.literal(false),
+  /** Whether the Wit activation roll applies (false for uniques and most passives). */
+  wisdomCheck: z.boolean(),
+  /** Where the engine-only fields (target, wisdomCheck) came from. */
+  engineSource: z.enum(['uma-tools', 'inferred']),
+  /**
+   * Numeric game tag ids (e.g. 401 speed, 403 acceleration, 6xx grouped skills).
+   * The engine counts an activation only for tagged (real) skills and uses the
+   * 600-699 group for one scaling rule. `[-1]` when unknown upstream.
+   */
+  engineTags: z.array(z.number().int()),
   category: z.enum(['speed', 'acceleration', 'current_speed', 'recovery', 'passive', 'debuff']),
   filterBuckets: z.array(z.string()).min(1),
   gameToraUrl: z.string().url().optional(),
@@ -224,7 +264,7 @@ const CourseSchema = z.object({
   direction: z.enum(['right', 'left', 'straight']),
   layout: z.string().min(1),
   corners: z.array(SectionSchema.extend({ number: z.number().int() })),
-  straights: z.array(SectionSchema.extend({ kind: z.string() })),
+  straights: z.array(SectionSchema.extend({ kind: z.string(), frontType: z.number().int() })),
   uphills: z.array(SectionSchema.extend({ gradePercent: z.number().positive() })),
   downhills: z.array(SectionSchema.extend({ gradePercent: z.number().positive() })),
   phases: z.array(SectionSchema.extend({ phase: z.number().int().min(0).max(3) })).length(4),
@@ -359,6 +399,11 @@ async function main() {
   const rawConditions = await readRaw('skill-conditions.json');
   const rawCmGlobal = await readRaw('champions-meeting-global.json');
   const rawCmJp = await readRaw('champions-meeting-jp.json');
+  // Engine metadata that GameTora does not publish (per-effect target, Wit-check
+  // flag), taken from alpha123/uma-tools' Global skill table when it has been
+  // fetched. Missing file or missing id -> conservative inference, flagged as such.
+  const utSkills = (await readRawOptional('uma-tools/skill_data.json')) ?? {};
+  let inferredEngineCount = 0;
 
   const rejected = [];
   const reject = (kind, id, reason) => rejected.push({ kind, id, reason });
@@ -386,7 +431,11 @@ async function main() {
     for (const c of track.courses) {
       const surface = SURFACE[c.terrain];
       const direction = DIRECTION[c.turn];
-      const layout = LAYOUT[c.inout] ?? 'standard';
+      const layout = LAYOUT[c.inout];
+      if (!layout) {
+        reject('course', c.id, `unknown inout enum (${c.inout})`);
+        continue;
+      }
       // Classification always comes from the official metre bands, never from
       // GameTora's `distance` enum (which mislabels 1300 m / 1400 m courses).
       const distanceCategory = getDistanceCategory(c.length);
@@ -401,7 +450,12 @@ async function main() {
         .map((x) => ({ start: x.start, end: x.end, number: x.number }))
         .sort((a, b) => a.start - b.start);
       const straights = (c.straights ?? [])
-        .map((x) => ({ start: x.start, end: x.end, kind: STRAIGHT_KIND[x.frontType] ?? 'backstretch' }))
+        .map((x) => ({
+          start: x.start,
+          end: x.end,
+          kind: STRAIGHT_KIND[x.frontType] ?? 'backstretch',
+          frontType: x.frontType,
+        }))
         .sort((a, b) => a.start - b.start);
       const slopes = c.slopes ?? [];
       // `slope` is stored as grade x 10000 (10000 => 1.0 %). Positive = uphill.
@@ -424,9 +478,7 @@ async function main() {
         id: Number(c.id),
         trackId,
         trackName,
-        name: `${trackName} ${surface === 'turf' ? 'Turf' : 'Dirt'} ${c.length}m${
-          layout === 'inner' || layout === 'outer' ? ` (${layout})` : ''
-        }`,
+        name: `${trackName} ${surface === 'turf' ? 'Turf' : 'Dirt'} ${c.length}m${LAYOUT_NAME_SUFFIX[layout] ?? ''}`,
         distance: c.length,
         distanceCategory,
         upstreamDistanceCategory: upstreamCategory,
@@ -523,7 +575,41 @@ async function main() {
   const emittedGeneIds = new Set();
   let globalOverrideCount = 0;
 
-  const normalizeGroups = (rawGroups) =>
+  const squash = (c) => String(c ?? '').replace(/\s+/g, '');
+
+  /**
+   * Per-effect target from uma-tools, matched by condition text and effect
+   * type/value rather than by index, so a filtered or reordered group can never be
+   * paired with the wrong alternative. Falls back to "self", or "others" for a
+   * debuff, when the skill is unknown upstream.
+   */
+  const findAlternative = (utSkill, group) =>
+    (utSkill?.alternatives ?? []).find(
+      (a) =>
+        squash(a.condition) === squash(group.condition) &&
+        squash(a.precondition) === squash(group.precondition),
+    ) ?? null;
+
+  const effectTarget = (utSkill, group, effect, isDebuff) => {
+    const fallback = isDebuff ? 9 : 1;
+    const alt = findAlternative(utSkill, group);
+    if (!alt) return fallback;
+    const match = (alt.effects ?? []).find((e) => e.type === effect.type && e.modifier === effect.value);
+    return match ? match.target : fallback;
+  };
+
+  const effectScaling = (utSkill, group, effect) => {
+    const alt = findAlternative(utSkill, group);
+    const match = alt && (alt.effects ?? []).find((e) => e.type === effect.type && e.modifier === effect.value);
+    return match && typeof match.scaling === 'number' ? match.scaling : 1;
+  };
+
+  const groupDurationScaling = (utSkill, group) => {
+    const alt = findAlternative(utSkill, group);
+    return alt && typeof alt.durationScaling === 'number' ? alt.durationScaling : 1;
+  };
+
+  const normalizeGroups = (rawGroups, utSkill, isDebuff) =>
     (rawGroups ?? [])
       .map((g) => ({
         condition: String(g.condition ?? '').trim(),
@@ -531,15 +617,31 @@ async function main() {
         // `base_time` is duration x 10000 seconds; -1 marks a permanent/passive effect.
         baseDurationSeconds: g.base_time === -1 ? -1 : g.base_time / 10000,
         cooldownSeconds: g.cd != null ? g.cd / 10000 : null,
+        durationScaling: groupDurationScaling(utSkill, g),
         effects: (g.effects ?? [])
           .map((e) => ({
             kind: EFFECT_TYPES[e.type] ?? `unknown_${e.type}`,
             rawType: e.type,
             rawValue: e.value,
+            target: effectTarget(utSkill, g, e, isDebuff),
+            scaling: effectScaling(utSkill, g, e),
           }))
           .filter((e) => !e.kind.startsWith('unknown_')),
       }))
       .filter((g) => g.condition.length > 0 && g.effects.length > 0);
+
+  /**
+   * Wit-check flag. Upstream value when known; otherwise: uniques never roll, and a
+   * fully passive skill (every group permanent) is applied from the gate without a
+   * roll. Checked against uma-tools' Global table: every non-passive white/gold
+   * skill there is 1 and every passive one is 0, bar three exceptions.
+   */
+  const wisdomCheckFor = (utSkill, rarity, isPassive) => {
+    if (utSkill) return utSkill.wisdomCheck === 1;
+    inferredEngineCount += 1;
+    if (rarity === 'unique' || rarity === 'unique_upgraded' || rarity === 'evolution') return false;
+    return !isPassive;
+  };
 
   for (const raw of rawSkills) {
     const rarity = rarityLabel(raw.rarity);
@@ -561,7 +663,8 @@ async function main() {
     }
 
     const view = globalView(raw);
-    const groups = normalizeGroups(view.conditionGroups);
+    const utSkill = utSkills[String(raw.id)] ?? null;
+    const groups = normalizeGroups(view.conditionGroups, utSkill, isOpponentDebuff(view.tags));
 
     if (!groups.length) {
       const kinds = (raw.condition_groups ?? [])
@@ -633,6 +736,9 @@ async function main() {
       isPassive,
       isDebuff,
       isNegativeSkill: false,
+      wisdomCheck: wisdomCheckFor(utSkill, rarity, isPassive),
+      engineSource: utSkill ? 'uma-tools' : 'inferred',
+      engineTags: utSkill && Array.isArray(utSkill.tags) && utSkill.tags.length ? utSkill.tags : [-1],
       isInheritedUnique: false,
       inheritedFromSkillId: null,
       usesGlobalOverride: view.overridden,
@@ -665,7 +771,8 @@ async function main() {
     const gene = globalGeneView(raw);
     if (gene && gene.name && !emittedGeneIds.has(gene.id)) {
       emittedGeneIds.add(gene.id);
-      const geneGroups = normalizeGroups(gene.conditionGroups);
+      const utGene = utSkills[String(gene.id)] ?? null;
+      const geneGroups = normalizeGroups(gene.conditionGroups, utGene, isDebuff);
       if (geneGroups.length) {
         const geneKinds = new Set(geneGroups.flatMap((g) => g.effects.map((e) => e.kind)));
         const genePassive = geneGroups.every((g) => g.baseDurationSeconds === -1);
@@ -691,6 +798,9 @@ async function main() {
             upgradeOfId: null,
             effectKinds: [...geneKinds],
             isPassive: genePassive,
+            wisdomCheck: wisdomCheckFor(utGene, 'inherited_unique', genePassive),
+            engineSource: utGene ? 'uma-tools' : 'inferred',
+            engineTags: utGene && Array.isArray(utGene.tags) && utGene.tags.length ? utGene.tags : [-1],
             isInheritedUnique: true,
             inheritedFromSkillId: gene.parentId,
             usesGlobalOverride: gene.overridden,
@@ -1031,6 +1141,7 @@ async function main() {
   );
   console.log(
     `    inherited uniques ${inheritedUniqueCount} - Global-specific values on ${globalOverrideCount} skills`,
+    `    engine metadata (target / wit check): ${skills.length - inferredEngineCount} from uma-tools, ${inferredEngineCount} inferred`,
   );
   console.log(`  characters  ${characters.length} (excluded ${excludedCharacters.length})`);
   console.log(`  conditions  ${conditions.length}`);

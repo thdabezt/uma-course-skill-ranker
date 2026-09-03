@@ -2,21 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "uma-course-skill-ranker",
+      "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
-      "port": 3000
-    },
-    {
-      "name": "uma-prod",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "start"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
     }
   ]

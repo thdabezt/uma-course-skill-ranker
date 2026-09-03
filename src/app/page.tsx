@@ -2,26 +2,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { CharacterRanking } from '@/components/CharacterRanking';
-import { CourseInfo } from '@/components/CourseInfo';
+import { rankCharacters, type RankedCharacter } from '@/analysis/characterRanking';
+import { SAMPLES, deservesDetail, isAccelSkill, isSpeedSkill, selectAllAnalyzed, INNATE_RARITIES } from '@/analysis/rankSkills';
+import { DEFAULT_SEED, DEFAULT_SIMULATION_OPTIONS, createAnalysisContext, reliabilityOf, staticSkillData, type SkillAnalysis } from '@/analysis/skillAnalysis';
+import { analyzeMany } from '@/analysis/rankSkills';
+import { AccelTab } from '@/components/AccelTab';
+import { CharacterTab } from '@/components/CharacterTab';
+import type { ActivationOverlay } from '@/components/CourseDiagram';
 import { CourseSelector, defaultSelection, resolveSelection, type Selection } from '@/components/CourseSelector';
 import { DevExcluded } from '@/components/DevExcluded';
 import { EventPresets } from '@/components/EventPresets';
-import { RunnerPanel } from '@/components/RunnerPanel';
-import { SkillRanking } from '@/components/SkillRanking';
-import type { ActivationOverlay } from '@/components/CourseDiagram';
-import { ErrorState, Spinner, Toggle } from '@/components/ui';
+import { SpeedTab } from '@/components/SpeedTab';
+import { StaminaTab, type StaminaView } from '@/components/StaminaTab';
+import { TrackInfo } from '@/components/TrackInfo';
+import { ErrorState, Select, Spinner, Toggle } from '@/components/ui';
+import type { SkillRow } from '@/components/skillRows';
 import { characters, dataMeta, skills, skillsById } from '@/data';
-import { rankCharactersFrom, type RankedCharacter } from '@/ranking/characterRanking';
-import { rankSkills } from '@/ranking/rankSkills';
-import type { TransportSkillEvaluation } from '@/ranking/transport';
-import type { RankedSkillView } from '@/worker/rankingProtocol';
-import { RankingPool, workersSupported } from '@/worker/rankingPool';
-import { DEFAULT_RUNNER, SIMULATION, type RunnerConfig } from '@/simulation/config';
+import type { SimulationOptions } from '@/engine/compare';
+import { DEFAULT_RUNNER, RUNNING_STYLES, RUNNING_STYLE_LABELS, type RunnerConfig, type RunningStyle } from '@/simulation/config';
+import type { RaceSetup, RunnerStats, Skill } from '@/simulation/types';
 import { conditionNames } from '@/skills/conditionParser';
-import type { RaceSetup, RunnerStats } from '@/simulation/types';
+import { AnalysisPool, workersSupported } from '@/worker/analysisPool';
+import type { AnalysisRow } from '@/worker/analysisProtocol';
 
-/** Conditions that make a passive skill "course related" for the course panel. */
+/** Conditions that make a passive skill "course related" for the track panel. */
 const COURSE_CONDITIONS = new Set([
   'rotation',
   'ground_type',
@@ -29,89 +33,67 @@ const COURSE_CONDITIONS = new Set([
   'track_id',
   'is_basis_distance',
   'is_dirtgrade',
-  'is_tight_track',
   'season',
   'weather',
   'ground_condition',
   'course_distance',
 ]);
 
+type Tab = 'speed' | 'accel' | 'characters' | 'stamina';
+
+const TAB_LABELS: Record<Tab, string> = {
+  speed: 'Speed skills',
+  accel: 'Acceleration skills',
+  characters: 'Character ranking',
+  stamina: 'Stamina calculation',
+};
+
+/** Trailing debounce before an analysis starts. */
+const COMPUTE_DEBOUNCE_MS = 300;
+const RESULT_CACHE_LIMIT = 4;
+
+type Stage = 'screening' | 'detail' | 'done';
+
 interface Computed {
-  rankedSkills: RankedSkillView[];
-  rankedCharacters: RankedCharacter[];
-  baselineFinishTime: number;
+  analyses: Map<number, SkillAnalysis>;
+  stage: Stage;
 }
 
-/**
- * Trailing debounce before a ranking starts.
- *
- * Long enough to swallow a stepper drag or a retyped stat, short enough that a
- * deliberate click on a racecourse still feels immediate.
- */
-const COMPUTE_DEBOUNCE_MS = 250;
-
-/**
- * A ranking is a pure function of (race setup, runner), so switching back to a
- * previous setup can be free. Kept small: each entry holds all 653 evaluations with
- * their full per-sample debug payload, which is what the details panel renders.
- */
-const RESULT_CACHE_LIMIT = 6;
-
-function computeKey(setup: RaceSetup, runner: RunnerStats): string {
-  return [
-    setup.course.id,
-    setup.runningStyle,
-    setup.trackCondition,
-    setup.weather,
-    setup.season,
-    runner.speed,
-    runner.stamina,
-    runner.power,
-    runner.guts,
-    runner.wit,
-    runner.mood,
-    runner.distanceAptitude,
-    runner.surfaceAptitude,
-    runner.styleAptitude,
-    runner.skillActivationRate,
-    runner.startDelaySeconds,
-    runner.postNumber,
-    runner.popularity,
-  ].join('|');
+function computeKey(setup: RaceSetup, runner: RunnerStats, options: SimulationOptions): string {
+  return JSON.stringify([setup.course.id, setup.trackCondition, setup.weather, setup.season, runner, options]);
 }
+
+const analyzedSkills = selectAllAnalyzed(skills);
+const analyzedIds = analyzedSkills.map((s) => s.id);
 
 export default function Page() {
   const [selection, setSelection] = useState<Selection>(() => defaultSelection());
-  /**
-   * Which event preset produced the current setup, if any.
-   *
-   * Stored rather than derived: the cup schedule reuses racecourses, and cups 31 and
-   * 46 are identical in every race field, so no comparison against `selection` can
-   * distinguish them. The stored setup is kept alongside the key so the highlight
-   * heals itself - any hand edit in the course selector stops matching and the badge
-   * clears without needing an explicit reset on every code path that edits the setup.
-   */
   const [appliedPreset, setAppliedPreset] = useState<{ key: string; setup: Selection } | null>(null);
   const [runner, setRunner] = useState<RunnerConfig>(DEFAULT_RUNNER);
-  const [tab, setTab] = useState<'skills' | 'characters'>('skills');
+  const [options, setOptions] = useState<SimulationOptions>(DEFAULT_SIMULATION_OPTIONS);
+  const [tab, setTab] = useState<Tab>('speed');
   const [showDev, setShowDev] = useState(false);
   const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
 
-  const [computing, setComputing] = useState(true);
+  const [computed, setComputed] = useState<Computed | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<Computed | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
+  const [forceFullSpurt, setForceFullSpurt] = useState(true);
+  const [staminaSkillIds, setStaminaSkillIds] = useState<number[]>([]);
+  const [stamina, setStamina] = useState<StaminaView | null>(null);
+  const [staminaComputing, setStaminaComputing] = useState(false);
+  const [staminaError, setStaminaError] = useState<string | null>(null);
+
   const cache = useRef(new Map<string, Computed>());
-  const pool = useRef<RankingPool | null>(null);
+  const pool = useRef<AnalysisPool | null>(null);
 
   // Workers are created after mount: `output: 'export'` prerenders this page in
-  // Node, where `Worker` does not exist. The pool itself spawns its threads lazily
-  // on the first ranking.
+  // Node, where `Worker` does not exist.
   useEffect(() => {
     if (!workersSupported()) return;
-    const created = new RankingPool();
+    const created = new AnalysisPool();
     pool.current = created;
     return () => {
       created.dispose();
@@ -126,20 +108,9 @@ export default function Page() {
     setAppliedPreset({ key, setup: next });
   }, []);
 
-  /** The preset only counts as applied while every field it set still holds. */
   const appliedPresetKey = useMemo(() => {
     if (!appliedPreset) return null;
-    const owned: (keyof Selection)[] = [
-      'trackName',
-      'surface',
-      'distance',
-      'courseId',
-      'trackCondition',
-      'weather',
-      'season',
-    ];
-    // Deliberately not runningStyle: applying a preset never sets it, so changing it
-    // must not clear the badge.
+    const owned: (keyof Selection)[] = ['trackName', 'surface', 'distance', 'courseId', 'trackCondition', 'weather', 'season'];
     return owned.every((k) => appliedPreset.setup[k] === selection[k]) ? appliedPreset.key : null;
   }, [appliedPreset, selection]);
 
@@ -148,115 +119,111 @@ export default function Page() {
       course
         ? {
             course,
-            runningStyle: selection.runningStyle,
+            runningStyle: runner.runningStyle,
             trackCondition: selection.trackCondition,
             weather: selection.weather,
             season: selection.season,
           }
         : null,
-    [course, selection.runningStyle, selection.trackCondition, selection.weather, selection.season],
+    [course, runner.runningStyle, selection.trackCondition, selection.weather, selection.season],
   );
 
-  const runnerStats: RunnerStats = useMemo(
-    () => ({ ...runner, runningStyle: selection.runningStyle }),
-    [runner, selection.runningStyle],
-  );
+  const runnerStats: RunnerStats = runner;
 
+  /* ------------------------------------------------------------ analysis */
   useEffect(() => {
     if (!setup) {
       setError('The selected racecourse could not be found in the Global data set.');
-      setComputing(false);
       return;
     }
-
-    const key = computeKey(setup, runnerStats);
+    const key = computeKey(setup, runnerStats, options);
     const hit = cache.current.get(key);
     if (hit) {
-      // Re-insert so the most recently used entry is the last to be evicted.
       cache.current.delete(key);
       cache.current.set(key, hit);
-      setResult(hit);
-      setComputing(false);
+      setComputed(hit);
       setError(null);
       setProgress(null);
       return;
     }
 
     let cancelled = false;
-
-    /** Assembles the final view from ranked rows, whichever path produced them. */
-    const finish = (rows: RankedSkillView[], baselineFinishTime: number) => {
-      const byId = new Map<number, TransportSkillEvaluation>();
-      for (const r of rows) byId.set(r.skill.id, r.evaluation);
-      const rankedCharacters = rankCharactersFrom(
-        characters,
-        skillsById,
-        setup,
-        runnerStats,
-        (skill) => byId.get(skill.id) ?? null,
-      );
-      const computed: Computed = {
-        rankedSkills: rows,
-        rankedCharacters,
-        baselineFinishTime,
-      };
-      cache.current.set(key, computed);
-      while (cache.current.size > RESULT_CACHE_LIMIT) {
-        const oldest = cache.current.keys().next();
-        if (oldest.done) break;
-        cache.current.delete(oldest.value);
-      }
+    const analyses = new Map<number, SkillAnalysis>();
+    const publish = (stage: Stage) => {
       if (cancelled) return;
-      setResult(computed);
-      setProgress(null);
-      setComputing(false);
+      const snapshot: Computed = { analyses: new Map(analyses), stage };
+      setComputed(snapshot);
+      if (stage === 'done') {
+        cache.current.set(key, snapshot);
+        while (cache.current.size > RESULT_CACHE_LIMIT) {
+          const oldest = cache.current.keys().next();
+          if (oldest.done) break;
+          cache.current.delete(oldest.value);
+        }
+      }
     };
-
+    const absorb = (rows: AnalysisRow[]) => {
+      for (const r of rows) analyses.set(r.skillId, r.analysis);
+    };
     const fail = (e: unknown) => {
       if (cancelled) return;
-      // A superseded job is not an error the user should see.
       if (e instanceof Error && e.message === 'superseded') return;
       setError(e instanceof Error ? e.message : String(e));
       setProgress(null);
-      setComputing(false);
     };
 
-    // Trailing debounce. Dragging a stepper or retyping a stat used to submit every
-    // intermediate value, and because the main thread was blocked the browser
-    // replayed the buffered events, chaining the freezes end to end.
     const handle = setTimeout(() => {
-      setComputing(true);
       setError(null);
-      setProgress({ done: 0, total: skills.length });
-
-      const onProgress = (done: number, total: number) => {
-        if (!cancelled) setProgress({ done, total });
-      };
-
-      if (pool.current) {
-        pool.current
-          .run(setup, runnerStats, skills.length, onProgress)
-          .then(({ rows, baselineFinishTimeSeconds }) => {
+      setProgress({ done: 0, total: analyzedIds.length });
+      const p = pool.current;
+      if (p) {
+        p.run({
+          setup,
+          runner: runnerStats,
+          options,
+          seed: DEFAULT_SEED,
+          skillIds: analyzedIds,
+          samples: SAMPLES.screening,
+          onProgress: (done, total) => !cancelled && setProgress({ done, total }),
+          onRows: (rows) => {
+            absorb(rows);
+            publish('screening');
+          },
+        })
+          .then((rows) => {
             if (cancelled) return;
-            const view: RankedSkillView[] = [];
-            for (const row of rows) {
-              const skill = skillsById.get(row.skillId);
-              if (skill) view.push({ skill, evaluation: row.evaluation });
-            }
-            view.sort(
-              (a, b) => b.evaluation.expectedHorseLengths - a.evaluation.expectedHorseLengths,
-            );
-            finish(view, baselineFinishTimeSeconds);
+            const detailIds = rows.filter((r) => deservesDetail(r.analysis)).map((r) => r.skillId);
+            setProgress({ done: 0, total: detailIds.length });
+            publish('detail');
+            return p.run({
+              setup,
+              runner: runnerStats,
+              options,
+              seed: DEFAULT_SEED,
+              skillIds: detailIds,
+              samples: SAMPLES.detail,
+              onProgress: (done, total) => !cancelled && setProgress({ done, total }),
+              onRows: (rows2) => {
+                absorb(rows2);
+                publish('detail');
+              },
+            });
+          })
+          .then(() => {
+            if (cancelled) return;
+            setProgress(null);
+            publish('done');
           })
           .catch(fail);
         return;
       }
-
-      // No Worker in this environment: run it inline, as before. Still blocking, but
-      // correct - and this path is the reference the worker path is tested against.
+      // No Worker: run inline (blocking) with the detail sample count directly.
       try {
-        const { ranked, baseline } = rankSkills(skills, setup, runnerStats, onProgress);
-        finish(ranked, baseline.baseline.finishTimeSeconds);
+        const ctx = createAnalysisContext(setup, runnerStats, options, DEFAULT_SEED);
+        const rows = analyzeMany(ctx, analyzedSkills, SAMPLES.screening);
+        for (const r of rows) analyses.set(r.skillId, r.analysis);
+        setProgress(null);
+        publish('done');
       } catch (e) {
         fail(e);
       }
@@ -266,55 +233,100 @@ export default function Page() {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [setup, runnerStats, attempt]);
+  }, [setup, runnerStats, options, attempt]);
 
-  const greenSkills = useMemo(() => {
-    if (!result) return [];
-    return result.rankedSkills
-      .filter(
-        (r) =>
-          r.skill.isPassive &&
-          r.evaluation.canActivate &&
-          r.skill.conditionGroups.some((g) =>
-            conditionNames(g.condition).some((n) => COURSE_CONDITIONS.has(n)),
-          ),
+  /* ------------------------------------------------------------- stamina */
+  useEffect(() => {
+    if (!setup || tab !== 'stamina') return;
+    const p = pool.current;
+    if (!p) return;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      setStaminaComputing(true);
+      setStaminaError(null);
+      const sweep = [-400, -200, -100, 0, 100, 200, 400].map((d) => Math.max(100, runner.stamina + d));
+      p.runStamina(
+        {
+          setup,
+          runner: runnerStats,
+          options: { ...options, forceFullSpurt },
+          skills: staminaSkillIds.map((id) => ({ id: String(id) })),
+          samples: 300,
+        },
+        sweep,
       )
-      .map((r) => r.skill)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [result]);
-
-  /**
-   * Activation regions of the expanded skill, projected onto the course diagram:
-   * where it may fire, the sampled points, the metres its effect actually covered
-   * and the metres the finish line cut off.
-   */
-  const overlay: ActivationOverlay | null = useMemo(() => {
-    if (!result || selectedSkillId == null || !course) return null;
-    const row = result.rankedSkills.find((r) => r.skill.id === selectedSkillId);
-    if (!row || !row.evaluation.canActivate) return null;
-    const group = row.evaluation.groups.find((g) => g.samples.length > 0);
-    if (!group) return null;
-
-    const effective: { start: number; end: number }[] = [];
-    const wasted: { start: number; end: number }[] = [];
-    for (const s of group.samples) {
-      // Approximate the covered distance from the runner's finishing pace.
-      const pace = course.distance / result.baselineFinishTime;
-      const covered = s.effectiveDurationSeconds * pace;
-      const lost = s.wastedDurationSeconds * pace;
-      const end = Math.min(course.distance, s.activationMeters + covered);
-      if (end > s.activationMeters) effective.push({ start: s.activationMeters, end });
-      if (lost > 0) wasted.push({ start: end, end: end + lost });
-    }
-
-    return {
-      skillName: row.skill.name,
-      windows: group.activation.windows,
-      samples: group.samples.map((s) => s.activationMeters),
-      effective,
-      wasted,
+        .then((outcome) => {
+          if (cancelled) return;
+          setStamina(outcome);
+          setStaminaComputing(false);
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          if (e instanceof Error && e.message === 'superseded') return;
+          setStaminaError(e instanceof Error ? e.message : String(e));
+          setStaminaComputing(false);
+        });
+    }, COMPUTE_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
     };
-  }, [result, selectedSkillId, course]);
+  }, [setup, runnerStats, options, forceFullSpurt, staminaSkillIds, tab, runner.stamina]);
+
+  /* ---------------------------------------------------------- derived */
+  const greenSkills = useMemo(() => {
+    if (!setup) return [];
+    const ctx = createAnalysisContext(setup, runnerStats, options, DEFAULT_SEED);
+    return skills
+      .filter((s) => s.isPassive && s.conditionGroups.some((g) => conditionNames(g.condition).some((n) => COURSE_CONDITIONS.has(n))))
+      .filter((s) => reliabilityOf(s, staticSkillData(ctx, s)) !== 'never')
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [setup, runnerStats, options]);
+
+  const rowsFor = useCallback(
+    (predicate: (s: Skill) => boolean): SkillRow[] => {
+      if (!computed) return [];
+      const out: SkillRow[] = [];
+      for (const s of analyzedSkills) {
+        if (!predicate(s) || INNATE_RARITIES.has(s.rarity)) continue;
+        const a = computed.analyses.get(s.id);
+        if (a) out.push({ skill: s, analysis: a });
+      }
+      return out;
+    },
+    [computed],
+  );
+  const speedRows = useMemo(() => rowsFor(isSpeedSkill), [rowsFor]);
+  const accelRows = useMemo(() => rowsFor(isAccelSkill), [rowsFor]);
+
+  const rankedCharacters: RankedCharacter[] = useMemo(() => {
+    if (!setup || !computed) return [];
+    return rankCharacters(characters, skillsById, setup, runnerStats, (id) => computed.analyses.get(id) ?? null);
+  }, [setup, computed, runnerStats]);
+
+  const overlay: ActivationOverlay | null = useMemo(() => {
+    if (!computed || selectedSkillId == null || !course) return null;
+    const a = computed.analyses.get(selectedSkillId);
+    const skill = skillsById.get(selectedSkillId);
+    if (!a || !skill || !a.activation) return null;
+    const end = Math.min(course.distance, a.activation.meanEnd);
+    return {
+      skillName: skill.name,
+      windows: a.region ? [{ start: a.region.start, end: Math.min(course.distance, a.region.end) }] : [],
+      samples: a.activation.starts.slice(0, 80),
+      effective: end > a.activation.meanStart ? [{ start: a.activation.meanStart, end }] : [],
+      wasted: a.timing.cutByFinishShare > 0.5 ? [{ start: course.distance, end: course.distance + course.distance * 0.02 }] : [],
+    };
+  }, [computed, selectedSkillId, course]);
+
+  const staminaCandidates = useMemo(() => skills.filter((s) => !s.isDebuff && !INNATE_RARITIES.has(s.rarity)).sort((a, b) => a.name.localeCompare(b.name)), []);
+
+  const stageLabel =
+    computed?.stage === 'screening'
+      ? 'Screening every skill (24 races each)...'
+      : computed?.stage === 'detail'
+        ? 'Refining the skills that matter (120 races each)...'
+        : null;
 
   return (
     <main className="mx-auto w-full max-w-[110rem] space-y-4 p-3 sm:p-5">
@@ -322,59 +334,75 @@ export default function Page() {
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">Uma Musume Course Skill Ranker</h1>
           <p className="mt-1 text-xs text-[var(--color-ink-dim)]">
-            Global (EN) data only. Skills and characters are ranked by a deterministic race simulation at{' '}
-            {(1 / SIMULATION.frameSeconds).toFixed(0)} frames per second.
+            Global (EN) data only. Every number comes from paired race simulations with the uma-tools engine (the calculator behind umalator).
           </p>
         </div>
         <Toggle label="Developer view" checked={showDev} onChange={setShowDev} />
       </header>
 
       <CourseSelector selection={selection} onChange={setSelection} />
-      <EventPresets
-        selection={selection}
-        appliedPresetKey={appliedPresetKey}
-        onApply={applyPreset}
-      />
-      <RunnerPanel runner={runner} onChange={setRunner} />
+      <EventPresets selection={selection} appliedPresetKey={appliedPresetKey} onApply={applyPreset} />
 
-      {error && (
-        <ErrorState
-          title="The ranking could not be computed"
-          detail={error}
-          onRetry={() => setAttempt((a) => a + 1)}
-        />
-      )}
+      {course && <TrackInfo course={course} runner={runner} greenSkills={greenSkills} overlay={overlay} />}
 
-      {course && (
-        <CourseInfo
-          course={course}
-          baselineFinishTime={result?.baselineFinishTime ?? null}
-          greenSkills={greenSkills}
-          overlay={overlay}
-        />
-      )}
+      {error && <ErrorState title="The analysis could not be computed" detail={error} onRetry={() => setAttempt((a) => a + 1)} />}
 
-      <div className="flex gap-1.5">
-        <Toggle label="Skill ranking" checked={tab === 'skills'} onChange={() => setTab('skills')} />
-        <Toggle label="Character ranking" checked={tab === 'characters'} onChange={() => setTab('characters')} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5" role="tablist">
+          {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`rounded-md border px-3 py-1.5 text-sm ${tab === t ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'border-[var(--color-line)] text-[var(--color-ink-dim)] hover:border-[var(--color-accent)]'}`}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
+        {tab !== 'stamina' && (
+          <div className="flex flex-wrap items-end gap-3 text-xs text-[var(--color-ink-dim)]">
+            <Select
+              label="Running style"
+              value={runner.runningStyle}
+              onChange={(v) => setRunner({ ...runner, runningStyle: v as RunningStyle })}
+              options={RUNNING_STYLES.map((s) => ({ value: s, label: RUNNING_STYLE_LABELS[s] }))}
+            />
+            <span className="pb-2">
+              Build {runner.speed} / {runner.stamina} / {runner.power} / {runner.guts} / {runner.wit}, edit in the Stamina tab.
+            </span>
+          </div>
+        )}
       </div>
 
-      {computing && (
-        <Spinner label="Running the race simulation for every Global skill..." progress={progress} />
-      )}
+      {stageLabel && tab !== 'stamina' && <Spinner label={stageLabel} progress={progress} />}
+      {!computed && !error && tab !== 'stamina' && <Spinner label="Starting the race simulations..." progress={progress} />}
 
-      {!computing && result && tab === 'skills' && (
-        <SkillRanking
-          ranked={result.rankedSkills}
-          selectedSkillId={selectedSkillId}
-          onSelectSkill={setSelectedSkillId}
-        />
+      {computed && course && tab === 'speed' && (
+        <SpeedTab rows={speedRows} courseDistance={course.distance} selectedSkillId={selectedSkillId} onSelect={setSelectedSkillId} />
       )}
-      {!computing && result && tab === 'characters' && (
-        <CharacterRanking
-          ranked={result.rankedCharacters}
-          runningStyle={selection.runningStyle}
-          evolutionAvailable={dataMeta.evolutionSkillsAvailableOnGlobal}
+      {computed && course && tab === 'accel' && (
+        <AccelTab rows={accelRows} courseDistance={course.distance} selectedSkillId={selectedSkillId} onSelect={setSelectedSkillId} />
+      )}
+      {computed && course && tab === 'characters' && (
+        <CharacterTab ranked={rankedCharacters} runningStyle={runner.runningStyle} courseDistance={course.distance} evolutionAvailable={dataMeta.evolutionSkillsAvailableOnGlobal} />
+      )}
+      {tab === 'stamina' && (
+        <StaminaTab
+          runner={runner}
+          onRunnerChange={setRunner}
+          options={options}
+          onOptionsChange={setOptions}
+          forceFullSpurt={forceFullSpurt}
+          onForceFullSpurtChange={setForceFullSpurt}
+          candidateSkills={staminaCandidates}
+          selectedSkillIds={staminaSkillIds}
+          onSelectedSkillsChange={setStaminaSkillIds}
+          view={stamina}
+          computing={staminaComputing}
+          error={staminaError}
         />
       )}
 
@@ -382,31 +410,24 @@ export default function Page() {
 
       <footer className="space-y-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-panel)] p-4 text-xs text-[var(--color-ink-dim)]">
         <p>
-          <strong className="text-[var(--color-ink)]">Data source:</strong> skill, character and racecourse data
-          is derived from the public static JSON that{' '}
-          <a
-            href={dataMeta.source.homepage}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[var(--color-accent)] underline"
-          >
+          <strong className="text-[var(--color-ink)]">Calculation:</strong> the race model is the GPL-licensed engine from{' '}
+          <a href="https://github.com/alpha123/uma-tools" target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] underline">
+            alpha123/uma-tools
+          </a>
+          , the simulator behind umalator, ported with the mechanics of the deployed Global build (spot struggle, rushing, downhill mode, Fully Charged, unique level scaling). A skill&apos;s value is the gap, in horse lengths, between the same seeded race with and without it.
+        </p>
+        <p>
+          <strong className="text-[var(--color-ink)]">Data source:</strong> skill, character and racecourse data is derived from the public static JSON that{' '}
+          <a href={dataMeta.source.homepage} target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] underline">
             {dataMeta.source.name}
           </a>{' '}
-          publishes for its own site. Fetched {new Date(dataMeta.dataFetchedAt).toUTCString()}; normalized{' '}
-          {new Date(dataMeta.generatedAt).toUTCString()}. A scheduled job re-checks the upstream data daily
-          and redeploys this site whenever it changes.
+          publishes for its own site, enriched with engine metadata from uma-tools. Fetched {new Date(dataMeta.dataFetchedAt).toUTCString()}; normalized {new Date(dataMeta.generatedAt).toUTCString()}.
         </p>
         <p>
-          <strong className="text-[var(--color-ink)]">Scope:</strong> {dataMeta.counts.courses} racecourses,{' '}
-          {dataMeta.counts.skills} skills and {dataMeta.counts.characters} characters released on the Global
-          server. {dataMeta.counts.excludedSkills} skills, {dataMeta.counts.excludedCharacters} characters and{' '}
-          {dataMeta.counts.excludedCourses} racecourses that are Japan-only are excluded.
+          <strong className="text-[var(--color-ink)]">Scope:</strong> {dataMeta.counts.courses} racecourses, {dataMeta.counts.skills} skills and {dataMeta.counts.characters} characters released on the Global server.
         </p>
         <p>
-          <strong className="text-[var(--color-ink)]">Disclaimer:</strong> all numbers come from an independent
-          simulation of publicly documented mechanics, run against a single reference runner with no opponents.
-          They are a modelling aid, not official values. Uma Musume: Pretty Derby is the property of Cygames;
-          this project is unaffiliated with Cygames and with GameTora.
+          <strong className="text-[var(--color-ink)]">Disclaimer:</strong> a solo simulation with a synthetic pacer; everything that depends on other runners is modelled statistically. Uma Musume: Pretty Derby is the property of Cygames; this project is unaffiliated with Cygames, GameTora and uma-tools.
         </p>
       </footer>
     </main>

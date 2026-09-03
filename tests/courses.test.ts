@@ -167,7 +167,7 @@ describe('course identity and layout coverage', () => {
     for (const c of courses) {
       expect(['turf', 'dirt']).toContain(c.surface);
       expect(['right', 'left', 'straight']).toContain(c.direction);
-      expect(['inner', 'outer', 'inner-outer', 'outer-inner', 'standard']).toContain(c.layout);
+      expect(['standard', 'inner', 'outer', 'outer-inner']).toContain(c.layout);
     }
   });
 

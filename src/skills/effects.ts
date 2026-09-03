@@ -1,4 +1,4 @@
-import { SIMULATION } from '@/simulation/config';
+import { DURATION_DISTANCE_REFERENCE, EFFECT_VALUE_SCALE, RECOVERY_VALUE_SCALE } from '@/simulation/config';
 import type { SkillConditionGroup, SkillEffect } from '@/simulation/types';
 
 /** Effect kinds the solo simulation reproduces. */
@@ -63,7 +63,7 @@ export const EFFECT_LABELS: Record<string, string> = {
 /** Skill duration scales with course length. */
 export function durationSeconds(group: SkillConditionGroup, courseDistance: number): number {
   if (group.baseDurationSeconds < 0) return Infinity;
-  return group.baseDurationSeconds * (courseDistance / SIMULATION.durationDistanceReference);
+  return group.baseDurationSeconds * (courseDistance / DURATION_DISTANCE_REFERENCE);
 }
 
 export function describeEffect(effect: SkillEffect): string {
@@ -71,18 +71,18 @@ export function describeEffect(effect: SkillEffect): string {
   switch (effect.kind) {
     case 'target_speed':
     case 'current_speed':
-      return `${label} ${signed(effect.rawValue / SIMULATION.effectValueScale, 3)} m/s`;
+      return `${label} ${signed(effect.rawValue / EFFECT_VALUE_SCALE, 3)} m/s`;
     case 'acceleration':
-      return `${label} ${signed(effect.rawValue / SIMULATION.effectValueScale, 3)} m/s²`;
+      return `${label} ${signed(effect.rawValue / EFFECT_VALUE_SCALE, 3)} m/s²`;
     case 'stamina_recovery':
-      return `${label} ${signed((effect.rawValue / SIMULATION.recoveryValueScale) * 100, 2)}% of max stamina`;
+      return `${label} ${signed((effect.rawValue / RECOVERY_VALUE_SCALE) * 100, 2)}% of max stamina`;
     case 'speed_stat':
     case 'stamina_stat':
     case 'power_stat':
     case 'guts_stat':
     case 'wit_stat':
     case 'all_stats':
-      return `${label} ${signed(effect.rawValue / SIMULATION.effectValueScale, 0)}`;
+      return `${label} ${signed(effect.rawValue / EFFECT_VALUE_SCALE, 0)}`;
     default:
       return label;
   }

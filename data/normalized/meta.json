@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-05T06:04:07.545Z",
-  "dataFetchedAt": "2026-08-05T06:04:07.315Z",
+  "generatedAt": "2026-09-03T12:27:18.190Z",
+  "dataFetchedAt": "2026-08-01T12:38:55.719Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,20 +10,20 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "51417017",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.51417017.json"
+        "contentHash": "d2bcbaba",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.d2bcbaba.json"
       },
       {
         "key": "characters",
         "file": "characters.json",
-        "contentHash": "2da8e43e",
-        "sourceUrl": "https://gametora.com/data/umamusume/characters.2da8e43e.json"
+        "contentHash": "cceeef09",
+        "sourceUrl": "https://gametora.com/data/umamusume/characters.cceeef09.json"
       },
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "bfdf62f7",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.bfdf62f7.json"
+        "contentHash": "13757beb",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.13757beb.json"
       },
       {
         "key": "racetracks",
@@ -88,84 +88,84 @@
       {
         "severity": "warning",
         "courseId": 10707,
-        "course": "Chukyo Dirt 1400m (inner)",
+        "course": "Chukyo Dirt 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10702,
-        "course": "Chukyo Turf 1400m (inner)",
+        "course": "Chukyo Turf 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10911,
-        "course": "Hanshin Dirt 1400m (inner)",
+        "course": "Hanshin Dirt 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10902,
-        "course": "Hanshin Turf 1400m (outer)",
+        "course": "Hanshin Turf 1400m (inner)",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 11301,
-        "course": "Kawasaki Dirt 1400m (inner)",
+        "course": "Kawasaki Dirt 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10813,
-        "course": "Kyoto Dirt 1400m (inner)",
+        "course": "Kyoto Dirt 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10802,
-        "course": "Kyoto Turf 1400m (outer)",
+        "course": "Kyoto Turf 1400m (inner)",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10803,
-        "course": "Kyoto Turf 1400m",
+        "course": "Kyoto Turf 1400m (outer)",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10303,
-        "course": "Niigata Turf 1400m (outer)",
+        "course": "Niigata Turf 1400m (inner)",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10609,
-        "course": "Tokyo Dirt 1300m (inner)",
+        "course": "Tokyo Dirt 1300m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1300 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10610,
-        "course": "Tokyo Dirt 1400m (inner)",
+        "course": "Tokyo Dirt 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       },
       {
         "severity": "warning",
         "courseId": 10601,
-        "course": "Tokyo Turf 1400m (inner)",
+        "course": "Tokyo Turf 1400m",
         "check": "upstream-distance-category",
         "detail": "GameTora tags 1400 m as mile, official band is sprint (using the official band)"
       }

@@ -4,9 +4,9 @@ import { useMemo, memo } from 'react';
 
 import { courses, trackNames } from '@/data';
 import {
-  RUNNING_STYLES,
-  RUNNING_STYLE_LABELS,
-  type RunningStyle,
+  SEASON_LABELS,
+  TRACK_CONDITION_LABELS,
+  WEATHER_LABELS,
   type Season,
   type Surface,
   type TrackCondition,
@@ -20,33 +20,12 @@ export interface Selection {
   surface: Surface;
   distance: number;
   courseId: number;
-  runningStyle: RunningStyle;
   trackCondition: TrackCondition;
   weather: Weather;
   season: Season;
 }
 
-const CONDITION_LABELS: Record<TrackCondition, string> = {
-  firm: 'Firm',
-  good: 'Good',
-  soft: 'Soft',
-  heavy: 'Heavy',
-};
-
-const WEATHER_LABELS: Record<Weather, string> = {
-  sunny: 'Sunny',
-  cloudy: 'Cloudy',
-  rainy: 'Rainy',
-  snowy: 'Snowy',
-};
-
-const SEASON_LABELS: Record<Season, string> = {
-  spring: 'Spring',
-  summer: 'Summer',
-  autumn: 'Autumn',
-  winter: 'Winter',
-  sakura: 'Cherry blossom',
-};
+const CONDITION_LABELS = TRACK_CONDITION_LABELS;
 
 const DIRECTION_LABELS: Record<string, string> = {
   right: 'Right (clockwise)',
@@ -55,11 +34,10 @@ const DIRECTION_LABELS: Record<string, string> = {
 };
 
 const LAYOUT_LABELS: Record<string, string> = {
+  standard: 'Single layout',
   inner: 'Inner',
   outer: 'Outer',
-  'inner-outer': 'Inner to outer',
   'outer-inner': 'Outer to inner',
-  standard: 'Standard',
 };
 
 export function resolveSelection(sel: Selection): Course | null {
@@ -74,7 +52,6 @@ export function defaultSelection(): Selection {
     surface: preferred.surface,
     distance: preferred.distance,
     courseId: preferred.id,
-    runningStyle: 'pace_chaser',
     trackCondition: 'firm',
     weather: 'sunny',
     season: 'spring',
@@ -133,7 +110,7 @@ function CourseSelectorImpl({
   };
 
   return (
-    <Panel title="Race setup" subtitle="Global (EN) racecourses only">
+    <Panel title="Race setup" subtitle="Racecourse and race-day conditions. The runner build lives in the Stamina tab.">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Select
           label="Racecourse"
@@ -168,12 +145,6 @@ function CourseSelectorImpl({
             {current ? (DIRECTION_LABELS[current.direction] ?? current.direction) : '-'}
           </div>
         </div>
-        <Select
-          label="Running style"
-          value={selection.runningStyle}
-          onChange={(v) => onChange({ ...selection, runningStyle: v as RunningStyle })}
-          options={RUNNING_STYLES.map((s) => ({ value: s, label: RUNNING_STYLE_LABELS[s] }))}
-        />
         <Select
           label="Track condition"
           value={selection.trackCondition}

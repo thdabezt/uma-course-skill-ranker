@@ -123,7 +123,7 @@ export function auditCourses(courses) {
 
     /* ---- layout -------------------------------------------------------- */
     if (!c.layout) add('error', c, 'missing-layout', 'no inner/outer course variant recorded');
-    if (!['inner', 'outer', 'inner-outer', 'outer-inner', 'standard'].includes(c.layout)) {
+    if (!['standard', 'inner', 'outer', 'outer-inner'].includes(c.layout)) {
       add('error', c, 'invalid-layout', `unknown course variant "${c.layout}"`);
     }
     if (!c.direction) add('error', c, 'missing-layout', 'no track direction recorded');

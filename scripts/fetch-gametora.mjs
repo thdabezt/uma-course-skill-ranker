@@ -11,7 +11,8 @@
  * sequential, with a polite delay). This is deliberately not a crawler: no link
  * following, no pagination, no HTML parsing, no per-entity requests.
  *
- * Total request count per refresh: 1 manifest + 9 documents.
+ * Total request count per refresh: 1 manifest + 9 documents, plus 6 plain files
+ * from the alpha123/uma-tools GitHub repository (engine metadata, see below).
  *
  * Nothing here is transformed. Normalization happens in `scripts/build-data.mjs`,
  * so raw upstream payloads and application data stay separate.
@@ -46,6 +47,23 @@ const DOCUMENTS = [
 ];
 
 const POLITE_DELAY_MS = 400;
+
+/**
+ * Engine metadata from alpha123/uma-tools (GPL-3.0), the simulator this app's
+ * calculation core is vendored from. GameTora does not publish per-effect targets
+ * or the Wit-check flag, so the Global skill table is pulled from the project's
+ * public repository (plain files on raw.githubusercontent.com, no API) and stored
+ * verbatim under data/raw/uma-tools/. build-data.mjs uses it to enrich skills.
+ */
+const UMA_TOOLS_ORIGIN = 'https://raw.githubusercontent.com/alpha123/uma-tools/master/umalator-global';
+const UMA_TOOLS_FILES = [
+  'skill_data.json',
+  'skill_meta.json',
+  'course_data.json',
+  'skillnames.json',
+  'umas.json',
+  'tracknames.json',
+];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -104,12 +122,34 @@ async function main() {
     documents.push({ key: doc.key, file: doc.file, contentHash: hash, sourceUrl: url });
   }
 
+  /* ---- uma-tools engine metadata ---- */
+  const umaToolsDir = path.join(RAW_DIR, 'uma-tools');
+  await mkdir(umaToolsDir, { recursive: true });
+  const umaToolsFiles = [];
+  for (const file of UMA_TOOLS_FILES) {
+    const url = `${UMA_TOOLS_ORIGIN}/${file}`;
+    const target = path.join(umaToolsDir, file);
+    await sleep(POLITE_DELAY_MS);
+    const payload = await getJson(url);
+    const text = JSON.stringify(payload);
+    const unchanged = existsSync(target) && (await readFile(target, 'utf8')) === text;
+    if (!unchanged) await writeFile(target, text, 'utf8');
+    const entries = Object.keys(payload).length;
+    console.log(`  ${unchanged ? '=' : '+'} uma-tools/${file} (${entries} entries${unchanged ? ', unchanged' : ''})`);
+    umaToolsFiles.push({ file: `uma-tools/${file}`, sourceUrl: url });
+  }
+
   const meta = {
     source: 'GameTora (gametora.com)',
     sourceHomepage: `${ORIGIN}/umamusume`,
     manifestUrl: MANIFEST_URL,
     fetchedAt: new Date().toISOString(),
     documents,
+    umaTools: {
+      source: 'alpha123/uma-tools (GPL-3.0-or-later)',
+      homepage: 'https://github.com/alpha123/uma-tools',
+      files: umaToolsFiles,
+    },
     note:
       'Public static JSON used by gametora.com itself. Re-run `npm run data:refresh` to update. ' +
       'Game data and names are the property of Cygames / Umamusume Pretty Derby; this project ' +

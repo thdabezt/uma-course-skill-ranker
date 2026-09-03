@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { characters, loadExcludedContent, skills, skillsById } from '@/data';
-import { createBaseline } from '@/ranking/skillEvaluation';
-import { rankCharacters } from '@/ranking/characterRanking';
-import { rankSkills } from '@/ranking/rankSkills';
+import { rankCharacters } from '@/analysis/characterRanking';
+import { selectAllAnalyzed } from '@/analysis/rankSkills';
 import {
   classifySkill,
   isNegativeEffect,
@@ -144,19 +143,17 @@ describe('negative skills cannot reach the rankings or a character score', () =>
   const setup = setupFor(tokyoTurf2400);
   const runner = runnerFor();
 
-  it('never appears in the skill ranking', () => {
-    const { ranked } = rankSkills(skills, setup, runner);
-    expect(ranked.length).toBe(skills.length);
-    expect(ranked.some((r) => r.skill.isNegativeSkill)).toBe(false);
-    expect(ranked.some((r) => r.skill.name === PURPLE_NEGATIVE)).toBe(false);
+  it('never appears in the analysed skill sets', () => {
+    const analysed = selectAllAnalyzed(skills);
+    expect(analysed.some((s) => s.isNegativeSkill)).toBe(false);
+    expect(analysed.some((s) => s.name === PURPLE_NEGATIVE)).toBe(false);
     for (const name of [...NEGATIVE_CONDITIONS, ...NEGATIVE_APTITUDES]) {
-      expect(ranked.some((r) => r.skill.name === name)).toBe(false);
+      expect(analysed.some((s) => s.name === name)).toBe(false);
     }
   });
 
   it('never contributes to a character score', () => {
-    const ctx = createBaseline(setup, runner);
-    const ranked = rankCharacters(characters, skillsById, ctx);
+    const ranked = rankCharacters(characters, skillsById, setup, runner, () => null);
     for (const r of ranked) {
       for (const c of r.contributions) {
         expect(c.skill.isNegativeSkill).toBe(false);
