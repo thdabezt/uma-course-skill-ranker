@@ -52,7 +52,7 @@ const RELIABILITY_HINT: Record<Reliability, string> = {
   random: 'Fires at a random point inside its zone.',
   field: 'Depends on other runners (overtaking, blocking, nearby runners); modelled by a probability distribution.',
   passive: 'Permanent effect applied from the gate.',
-  never: 'Its conditions cannot hold on this course with this runner.',
+  never: 'Its conditions cannot hold on this course with this runner; the row explains which one. A running-position condition can be relaxed in the Stamina tab ("Assume position from style").',
 };
 
 export function RarityChip({ skill }: { skill: Skill }) {

@@ -107,6 +107,12 @@ function RunnerPanelImpl({
           title="Front runners fight for the lead early in the race: a Guts-based speed boost that costs a lot of stamina (1.4x drain, 3.6x while rushed)."
         />
         <Toggle
+          label="Assume position from style"
+          checked={options.assumePosition !== false}
+          onChange={(v) => onOptionsChange({ ...options, assumePosition: v })}
+          title="Skills that require a running position (1st, top 40%, ...) are judged against the position a runner of this style usually holds: front runner 1st, pace chaser 2nd-4th, late surger and end closer 5th-9th of 9 (umalator's rule). Off (default) = position conditions are treated as reachable by any style, so every working skill is shown."
+        />
+        <Toggle
           label="Wit activation checks"
           checked={options.useIntChecks}
           onChange={(v) => onOptionsChange({ ...options, useIntChecks: v })}

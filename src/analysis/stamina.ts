@@ -62,7 +62,7 @@ function costOf(result: HpCalcResult, id: string): { rate: number; meanHpCost: n
 export function computeStamina(input: StaminaInput): StaminaResult {
   const course = toEngineCourse(input.setup.course);
   const horse = toHorseDesc(input.runner);
-  const racedef = toRaceDefinition(input.setup, input.runner);
+  const racedef = toRaceDefinition(input.setup, input.runner, input.options.assumePosition !== false);
   const seed = input.seed ?? DEFAULT_SEED;
   const strategy = STRATEGY_NAME[input.runner.runningStyle];
   const build = { horse, skills: input.skills };
@@ -101,7 +101,7 @@ export function computeStamina(input: StaminaInput): StaminaResult {
 /** Full-spurt rate as a function of stamina, for the sensitivity chart. */
 export function staminaSweep(input: StaminaInput, staminaValues: number[], samples = 60): { stamina: number; fullSpurtRate: number; remainingHpMedian: number }[] {
   const course = toEngineCourse(input.setup.course);
-  const racedef = toRaceDefinition(input.setup, input.runner);
+  const racedef = toRaceDefinition(input.setup, input.runner, input.options.assumePosition !== false);
   const seed = input.seed ?? DEFAULT_SEED;
   return staminaValues.map((stamina) => {
     const horse = toHorseDesc({ ...input.runner, stamina });

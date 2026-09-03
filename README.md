@@ -152,7 +152,7 @@ skill duration   = baseSeconds * distance / 1000
 skill proc rate  = max(1 - 90 / wit, 0.2)        (only rolled when "Wit activation checks" is on)
 ```
 
-Limitations inherited from the engine: skills with cooldowns fire once, conditions that depend on other runners are modelled by probability distributions, lane changes and dueling are not simulated, and the runner's position in the field comes from an assumed order range per running style (front runner 1st, pace chaser 2nd–4th, others 5th–9th of 9).
+Limitations inherited from the engine: skills with cooldowns fire once, conditions that depend on other runners are modelled by probability distributions, and lane changes and dueling are not simulated. Running-position conditions (`order`, `order_rate`) are treated as reachable by any style by default, so every skill whose zone exists on the course is evaluated; the "Assume position from style" toggle in the Stamina tab switches to umalator's rule (front runner 1st, pace chaser 2nd–4th, others 5th–9th of 9).
 
 ---
 

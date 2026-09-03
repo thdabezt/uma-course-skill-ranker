@@ -135,6 +135,9 @@ export const DEFAULT_SIMULATION_OPTIONS: SimulationOptions = {
   usePosKeep: true,
   useCompeteTop: true,
   useIntChecks: false,
+  // Off by default: a pace chaser can be 1st, so position conditions are treated as
+  // reachable and every skill whose zone exists on the course is evaluated.
+  assumePosition: false,
 };
 
 export const DEFAULT_SEED: [number, number] = [2615953739, 0];
@@ -152,7 +155,7 @@ export function createAnalysisContext(
     seed,
     course: toEngineCourse(setup.course),
     horse: toHorseDesc(runner),
-    racedef: toRaceDefinition(setup, runner),
+    racedef: toRaceDefinition(setup, runner, options.assumePosition !== false),
     phase2: phaseStart(setup.course.distance, 2),
     referenceCache: new Map(),
   };
@@ -182,6 +185,35 @@ export function reliabilityOf(skill: Skill, data: SkillData[]): Reliability {
   if (p === RandomPolicy || p === StraightRandomPolicy || p === AllCornerRandomPolicy) return 'random';
   if (p instanceof DistributionRandomPolicy) return 'field';
   return 'immediate';
+}
+
+const STYLE_NAME: Record<string, string> = {
+  front_runner: 'Front Runner',
+  pace_chaser: 'Pace Chaser',
+  late_surger: 'Late Surger',
+  end_closer: 'End Closer',
+};
+
+const ASSUMED_POSITION: Record<string, string> = {
+  front_runner: '1st',
+  pace_chaser: '2nd-4th of 9',
+  late_surger: '5th-9th of 9',
+  end_closer: '5th-9th of 9',
+};
+
+/** Why a skill can never fire on this course for this runner, in plain words. */
+export function neverReason(ctx: AnalysisContext, skill: Skill): string {
+  const conditions = skill.conditionGroups.map((g) => g.condition + (g.precondition ? '&' + g.precondition : ''));
+  const styles = conditions.map((c) => /running_style==(\d)/.exec(c)?.[1]).filter((n): n is string => n != null);
+  const style = STYLE_NAME[ctx.runner.runningStyle] ?? ctx.runner.runningStyle;
+  if (styles.length && styles.length === conditions.length) {
+    const names: Record<string, string> = { 1: 'Front Runner', 2: 'Pace Chaser', 3: 'Late Surger', 4: 'End Closer' };
+    return 'Restricted to ' + [...new Set(styles.map((n) => names[n] ?? n))].join(' / ') + '; the runner is a ' + style + '.';
+  }
+  if (ctx.options.assumePosition !== false && conditions.some((c) => /(^|&)order(_rate)?[<>=!]/.test(c))) {
+    return 'Its running-position condition cannot hold for a ' + style + ' (assumed ' + (ASSUMED_POSITION[ctx.runner.runningStyle] ?? '') + '). Turn off "Assume position from style" in the Stamina tab to evaluate it anyway.';
+  }
+  return 'Its distance, surface, track, weather or season conditions do not match this race.';
 }
 
 function regionOf(data: SkillData[]): { start: number; end: number } | null {
@@ -296,6 +328,7 @@ const fmt = (m: number) => `${Math.round(Math.abs(m))} m`;
  */
 export function assessAccel(
   ctx: AnalysisContext,
+  skill: Skill,
   reliability: Reliability,
   gain: Summary,
   results: number[],
@@ -311,7 +344,7 @@ export function assessAccel(
 
   if (reliability === 'never' || !activation || activation.rate < 0.02) {
     verdict = 'does-not-work';
-    explanation = 'Its conditions cannot be met on this course with this runner, so it never fires.';
+    explanation = reliability === 'never' ? neverReason(ctx, skill) : 'It did not fire in any simulated race.';
   } else if (reliability === 'random' || reliability === 'field') {
     const where = reliability === 'field' ? 'when the field allows it' : 'at a random point of its zone';
     const zone = `${fmt(activation.minStart)} to ${fmt(activation.maxStart)}`;
@@ -362,6 +395,8 @@ export function assessAccel(
  * finish line.
  */
 export function assessSpeed(
+  ctx: AnalysisContext,
+  skill: Skill,
   reliability: Reliability,
   gain: Summary,
   activation: ActivationStats | null,
@@ -375,8 +410,10 @@ export function assessSpeed(
   else tier = 'D';
 
   const parts: string[] = [];
-  if (reliability === 'never' || !activation) {
-    parts.push('Never fires here.');
+  if (reliability === 'never') {
+    parts.push(neverReason(ctx, skill));
+  } else if (!activation) {
+    parts.push('It did not fire in any simulated race.');
   } else {
     parts.push(
       reliability === 'immediate'
@@ -418,8 +455,8 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
       region,
       activation: null,
       timing: emptyTiming,
-      accel: wantsAccel ? assessAccel(ctx, reliability, summarize([]), [], null, emptyTiming, 0) : null,
-      speed: wantsSpeed ? assessSpeed(reliability, summarize([]), null, emptyTiming) : null,
+      accel: wantsAccel ? assessAccel(ctx, skill, reliability, summarize([]), [], null, emptyTiming, 0) : null,
+      speed: wantsSpeed ? assessSpeed(ctx, skill, reliability, summarize([]), null, emptyTiming) : null,
       error: null,
     };
   }
@@ -456,7 +493,7 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
   let accel: AccelAssessment | null = null;
   if (wantsAccel && data.length) {
     if (hasAccelEffect([data[0]])) {
-      accel = assessAccel(ctx, reliability, gain, res.results, activation, timing, referenceGain(ctx, data[0]));
+      accel = assessAccel(ctx, skill, reliability, gain, res.results, activation, timing, referenceGain(ctx, data[0]));
     } else {
       accel = {
         referenceGain: 0,
@@ -467,6 +504,6 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
       };
     }
   }
-  const speed = wantsSpeed ? assessSpeed(reliability, gain, activation, timing) : null;
+  const speed = wantsSpeed ? assessSpeed(ctx, skill, reliability, gain, activation, timing) : null;
   return { skillId: skill.id, samples, gain, reliability, region, activation, timing, accel, speed, error: null };
 }

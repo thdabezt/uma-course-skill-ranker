@@ -103,6 +103,25 @@ describe('skill analysis', () => {
     expect(a.speed?.tier).toBe(expected);
   });
 
+  it('evaluates a leader-only unique for a pace chaser by default, and only hides it under the umalator position assumption', () => {
+    // Angling and Scheming (inherited): phase>=2 & corner!=0 & order==1. No style condition.
+    const skill = skillByName('Angling and Scheming', 'inherited_unique');
+    expect(skill.runningStyleRestriction).toEqual([]);
+    const byDefault = createAnalysisContext(setupFor(course('Nakayama', 'turf', 1200)), runner);
+    const a = analyzeSkill(byDefault, skill, 16);
+    expect(a.reliability).toBe('immediate');
+    expect(a.gain.mean).toBeGreaterThan(0.5);
+    const assumed = createAnalysisContext(setupFor(course('Nakayama', 'turf', 1200)), runner, {
+      usePosKeep: true,
+      useCompeteTop: true,
+      useIntChecks: false,
+      assumePosition: true,
+    });
+    const b = analyzeSkill(assumed, skill, 8);
+    expect(b.reliability).toBe('never');
+    expect(b.accel?.explanation).toContain('running-position');
+  });
+
   it('distinguishes the Kyoto 1600 inner and outer layouts', () => {
     const inner = createAnalysisContext(setupFor(course('Kyoto', 'turf', 1600, 'inner')), runner);
     const outer = createAnalysisContext(setupFor(course('Kyoto', 'turf', 1600, 'outer')), runner);

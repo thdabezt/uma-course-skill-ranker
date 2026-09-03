@@ -97,6 +97,13 @@ export interface SimulationOptions {
   useCompeteTop: boolean;
   /** Roll the Wit activation check for every skill that has one. */
   useIntChecks: boolean;
+  /**
+   * Evaluate order / order_rate conditions against the running position assumed
+   * for the style (front runner 1st, pace chaser 2nd-4th, others 5th-9th of 9),
+   * as umalator's skill table does. Off (the default) = a position condition is
+   * treated as satisfiable anywhere, since any style can hold any position.
+   */
+  assumePosition?: boolean;
   /** Record per-frame traces for the extreme / representative runs. */
   collectTraces?: boolean;
 }
