@@ -27,7 +27,9 @@ import { buildBaseStats, buildSkillData, type HorseDesc, type SkillData } from '
 import { getParser } from '@/engine/vendor/ConditionParser';
 import { AllCornerRandomPolicy, DistributionRandomPolicy, ImmediatePolicy, RandomPolicy, StraightRandomPolicy } from '@/engine/vendor/ActivationSamplePolicy';
 import type { RaceSetup, RunnerStats, Skill } from '@/simulation/types';
+import { assumedParser } from '@/engine/requirements';
 import { hasAccelEffect as skillHasAccel, hasSpeedEffect as skillHasSpeed } from './rankSkills';
+import { NO_REQUIREMENTS, explainNever, requirementsOf, type Requirements } from './requirements';
 
 export type Reliability =
   /** Fires at a fixed point (the start of its condition region). */
@@ -114,6 +116,8 @@ export interface SkillAnalysis {
   timing: TimingStats;
   accel: AccelAssessment | null;
   speed: SpeedAssessment | null;
+  /** What the skill needs beyond the course (assumed to hold) and what the simulation rolled. */
+  requirements: Requirements;
   /** Something the analysis could not model (error text), or null. */
   error: string | null;
 }
@@ -138,6 +142,9 @@ export const DEFAULT_SIMULATION_OPTIONS: SimulationOptions = {
   // Off by default: a pace chaser can be 1st, so position conditions are treated as
   // reachable and every skill whose zone exists on the course is evaluated.
   assumePosition: false,
+  // Skill counters, "another skill just fired", popularity, gate, a named rival:
+  // assumed to hold and listed next to the number.
+  assumeRequirements: true,
 };
 
 export const DEFAULT_SEED: [number, number] = [2615953739, 0];
@@ -161,13 +168,14 @@ export function createAnalysisContext(
   };
 }
 
-const parser = getParser();
+const plainParser = getParser();
 
-/** Static view of where a skill can fire, straight from the condition parser. */
+/** Static view of where a skill can fire, straight from the condition parser the simulation uses. */
 export function staticSkillData(ctx: AnalysisContext, skill: Skill): SkillData[] {
   const horse = buildBaseStats(ctx.horse, ctx.racedef.mood);
   const wholeCourse = new RegionList();
   wholeCourse.push(new Region(0, ctx.course.distance));
+  const parser = ctx.options.assumeRequirements !== false ? assumedParser : plainParser;
   try {
     return buildSkillData(horse, horse, ctx.racedef, ctx.course, wholeCourse, parser, String(skill.id), Perspective.Self, 1);
   } catch {
@@ -182,38 +190,31 @@ export function reliabilityOf(skill: Skill, data: SkillData[]): Reliability {
   if (skill.isPassive) return 'passive';
   const p = first.samplePolicy;
   if (p === ImmediatePolicy) return 'immediate';
+  // A random policy confined to a few metres (umalator's placement of "7 skills
+  // activated") behaves like a fixed point.
+  if (p === RandomPolicy && first.regions.length === 1 && first.regions[0].end - first.regions[0].start <= 15) return 'immediate';
   if (p === RandomPolicy || p === StraightRandomPolicy || p === AllCornerRandomPolicy) return 'random';
   if (p instanceof DistributionRandomPolicy) return 'field';
   return 'immediate';
 }
 
-const STYLE_NAME: Record<string, string> = {
-  front_runner: 'Front Runner',
-  pace_chaser: 'Pace Chaser',
-  late_surger: 'Late Surger',
-  end_closer: 'End Closer',
-};
-
-const ASSUMED_POSITION: Record<string, string> = {
-  front_runner: '1st',
-  pace_chaser: '2nd-4th of 9',
-  late_surger: '5th-9th of 9',
-  end_closer: '5th-9th of 9',
-};
-
 /** Why a skill can never fire on this course for this runner, in plain words. */
 export function neverReason(ctx: AnalysisContext, skill: Skill): string {
-  const conditions = skill.conditionGroups.map((g) => g.condition + (g.precondition ? '&' + g.precondition : ''));
-  const styles = conditions.map((c) => /running_style==(\d)/.exec(c)?.[1]).filter((n): n is string => n != null);
-  const style = STYLE_NAME[ctx.runner.runningStyle] ?? ctx.runner.runningStyle;
-  if (styles.length && styles.length === conditions.length) {
-    const names: Record<string, string> = { 1: 'Front Runner', 2: 'Pace Chaser', 3: 'Late Surger', 4: 'End Closer' };
-    return 'Restricted to ' + [...new Set(styles.map((n) => names[n] ?? n))].join(' / ') + '; the runner is a ' + style + '.';
+  return explainNever(ctx, skill);
+}
+
+const joinList = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/** Sentences about what the number is conditional on, shared by both assessments. */
+export function requirementNotes(req: Requirements, activation: ActivationStats | null): string[] {
+  const out: string[] = [];
+  if (req.assumed.length) out.push(`Assumes ${joinList(req.assumed)}; the value only counts when that holds.`);
+  if (req.modelled.length) {
+    if (!activation) out.push(`Needs ${joinList(req.modelled)}, which this build never met in the simulation.`);
+    else if (activation.rate < 0.995) out.push(`Needs ${joinList(req.modelled)}; that held in ${Math.round(activation.rate * 100)}% of runs and the mean counts the misses as zero.`);
+    else out.push(`Needs ${joinList(req.modelled)} (held in every run).`);
   }
-  if (ctx.options.assumePosition !== false && conditions.some((c) => /(^|&)order(_rate)?[<>=!]/.test(c))) {
-    return 'Its running-position condition cannot hold for a ' + style + ' (assumed ' + (ASSUMED_POSITION[ctx.runner.runningStyle] ?? '') + '). Turn off "Assume position from style" in the Stamina tab to evaluate it anyway.';
-  }
-  return 'Its distance, surface, track, weather or season conditions do not match this race.';
+  return out;
 }
 
 function regionOf(data: SkillData[]): { start: number; end: number } | null {
@@ -335,6 +336,7 @@ export function assessAccel(
   activation: ActivationStats | null,
   timing: TimingStats,
   reference: number,
+  requirements: Requirements = NO_REQUIREMENTS,
 ): AccelAssessment {
   const ratio = reference > 0.02 ? Math.min(1.5, gain.mean / reference) : 0;
   const usefulShare = reference > 0.02 && results.length ? results.filter((g) => g >= 0.5 * reference).length / results.length : 0;
@@ -385,6 +387,7 @@ export function assessAccel(
         ? `Fires ${fmt(offset ?? 0)} before the final leg and has worn off before the speed jump; acceleration while already at cruising speed gains nothing.`
         : `Fires ${fmt(offset ?? 0)} after the speed jump, after the runner has reached its final-leg speed; nothing left to accelerate into.`;
   }
+  if (reliability !== 'never') explanation = [explanation, ...requirementNotes(requirements, activation)].join(' ');
   return { referenceGain: reference, ratio, usefulShare, verdict, explanation };
 }
 
@@ -401,6 +404,7 @@ export function assessSpeed(
   gain: Summary,
   activation: ActivationStats | null,
   timing: TimingStats,
+  requirements: Requirements = NO_REQUIREMENTS,
 ): SpeedAssessment {
   let tier: SpeedTier;
   if (gain.mean >= 1.5) tier = 'S';
@@ -426,6 +430,7 @@ export function assessSpeed(
     if (timing.hpCost > 5) parts.push(`Costs about ${Math.round(timing.hpCost)} HP.`);
     if (reliability === 'field') parts.push('Needs other runners (passing, being blocked, a rival nearby); the activation point is drawn from a probability distribution, as umalator does.');
   }
+  if (reliability !== 'never') parts.push(...requirementNotes(requirements, activation));
   return { tier, explanation: parts.join(' ') };
 }
 
@@ -457,9 +462,11 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
       timing: emptyTiming,
       accel: wantsAccel ? assessAccel(ctx, skill, reliability, summarize([]), [], null, emptyTiming, 0) : null,
       speed: wantsSpeed ? assessSpeed(ctx, skill, reliability, summarize([]), null, emptyTiming) : null,
+      requirements: NO_REQUIREMENTS,
       error: null,
     };
   }
+  const requirements = requirementsOf(skill, data[0].alternative ?? 0);
 
   let res: ComparisonResult;
   try {
@@ -483,6 +490,7 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
       timing: emptyTiming,
       accel: null,
       speed: null,
+      requirements,
       error: e instanceof Error ? e.message : String(e),
     };
   }
@@ -493,7 +501,7 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
   let accel: AccelAssessment | null = null;
   if (wantsAccel && data.length) {
     if (hasAccelEffect([data[0]])) {
-      accel = assessAccel(ctx, skill, reliability, gain, res.results, activation, timing, referenceGain(ctx, data[0]));
+      accel = assessAccel(ctx, skill, reliability, gain, res.results, activation, timing, referenceGain(ctx, data[0]), requirements);
     } else {
       accel = {
         referenceGain: 0,
@@ -504,6 +512,6 @@ export function analyzeSkill(ctx: AnalysisContext, skill: Skill, samples: number
       };
     }
   }
-  const speed = wantsSpeed ? assessSpeed(ctx, skill, reliability, gain, activation, timing) : null;
-  return { skillId: skill.id, samples, gain, reliability, region, activation, timing, accel, speed, error: null };
+  const speed = wantsSpeed ? assessSpeed(ctx, skill, reliability, gain, activation, timing, requirements) : null;
+  return { skillId: skill.id, samples, gain, reliability, region, activation, timing, accel, speed, requirements, error: null };
 }

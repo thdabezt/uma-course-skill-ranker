@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from 'react';
 
 import type { SpeedTier } from '@/analysis/skillAnalysis';
-import { AnalysisDetails, ReliabilityChip, SkillFilterBar, SkillName, efficiency, metres, num, pct, useSkillFilters, type SkillRow } from './skillRows';
+import { AnalysisDetails, SkillFilterBar, SkillName, TriggerChips, efficiency, metres, num, pct, useSkillFilters, type SkillRow } from './skillRows';
 import { Badge, EmptyState, Panel } from './ui';
 
 type SortKey = 'mean' | 'max' | 'efficiency' | 'carryover' | 'start';
@@ -123,7 +123,7 @@ export function SpeedTab({
                       <td className="py-2 pr-2 text-right tabular-nums">{pct(a.timing.carryoverShare)}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">{pct(a.timing.shadowShare)}</td>
                       <td className="py-2 pr-2 text-right tabular-nums">{pct(a.timing.cutByFinishShare)}</td>
-                      <td className="py-2 pr-2"><ReliabilityChip reliability={a.reliability} /></td>
+                      <td className="py-2 pr-2"><TriggerChips analysis={a} /></td>
                     </tr>
                     {open && (
                       <tr className="border-b border-[var(--color-line)]/60">

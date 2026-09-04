@@ -3,7 +3,7 @@
 import { Fragment, useMemo } from 'react';
 
 import type { AccelVerdict } from '@/analysis/skillAnalysis';
-import { AnalysisDetails, ReliabilityChip, SkillFilterBar, SkillName, metres, num, pct, useSkillFilters, type SkillRow } from './skillRows';
+import { AnalysisDetails, SkillFilterBar, SkillName, TriggerChips, metres, num, pct, useSkillFilters, type SkillRow } from './skillRows';
 import { Badge, EmptyState, Panel } from './ui';
 
 const GROUPS: { verdict: AccelVerdict; title: string; hint: string; tone: 'accent' | 'gold' | 'neutral' | 'warn' | 'bad' }[] = [
@@ -94,7 +94,7 @@ export function AccelTab({
                               <td className="py-2 pr-2 text-right tabular-nums text-[var(--color-ink-dim)]">{num(a.gain.min)} / {num(a.gain.max)}</td>
                               <td className="py-2 pr-2 text-right tabular-nums">{a.accel && a.accel.referenceGain > 0 ? pct(Math.min(1, a.accel.ratio)) : '-'}</td>
                               <td className="py-2 pr-2 text-right tabular-nums">{a.accel && a.accel.referenceGain > 0 ? pct(a.accel.usefulShare) : '-'}</td>
-                              <td className="py-2 pr-2"><ReliabilityChip reliability={a.reliability} /></td>
+                              <td className="py-2 pr-2"><TriggerChips analysis={a} /></td>
                             </tr>
                             {open && (
                               <tr className="border-b border-[var(--color-line)]/60">

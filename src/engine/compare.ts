@@ -28,6 +28,7 @@ import {
   type ActivationSamplePolicy,
 } from './vendor/ActivationSamplePolicy';
 import type { RaceDefinition } from './runner';
+import { assumedParser } from './requirements';
 
 export const HORSE_LENGTH_METERS = 2.5;
 export const FRAME_SECONDS = 1 / 15;
@@ -104,6 +105,13 @@ export interface SimulationOptions {
    * treated as satisfiable anywhere, since any style can hold any position.
    */
   assumePosition?: boolean;
+  /**
+   * Treat conditions a single-runner race cannot produce (skill-activation counters,
+   * "another skill just fired", popularity, gate, a named rival in the field) as
+   * satisfied, so the skill is valued on the assumption that its requirement is met.
+   * On by default; the analysis lists the assumed requirements next to the number.
+   */
+  assumeRequirements?: boolean;
   /** Record per-frame traces for the extreme / representative runs. */
   collectTraces?: boolean;
 }
@@ -201,6 +209,7 @@ function syntheticSkillData(def: SyntheticSkill, course: CourseData): SkillData 
     })),
     // Untagged: does not feed the activation counters (like the engine's own hooks).
     tags: [],
+    alternative: 0,
   };
 }
 
@@ -250,6 +259,7 @@ export function runComparison(
 ): ComparisonResult {
   const standard = new RaceSolverBuilder(nsamples).seed(seed[0], seed[1]).course(course);
   configureBuilder(standard, racedef);
+  if (options.assumeRequirements !== false) standard.withParser(assumedParser);
   const compare = standard.fork();
   standard.horse(uma1.horse).otherHorse(uma2.horse);
   compare.horse(uma2.horse).otherHorse(uma1.horse);

@@ -113,6 +113,12 @@ function RunnerPanelImpl({
           title="Skills that require a running position (1st, top 40%, ...) are judged against the position a runner of this style usually holds: front runner 1st, pace chaser 2nd-4th, late surger and end closer 5th-9th of 9 (umalator's rule). Off (default) = position conditions are treated as reachable by any style, so every working skill is shown."
         />
         <Toggle
+          label="Assume skill requirements"
+          checked={options.assumeRequirements !== false}
+          onChange={(v) => onOptionsChange({ ...options, assumeRequirements: v })}
+          title="Conditions a lone runner cannot produce - skill-activation counters (7 skills activated, a recovery skill used), another skill firing at that moment, popularity, gate, a named rival in the field - are treated as met; the skill row lists what it assumed. Off = such skills score as if the requirement never happens."
+        />
+        <Toggle
           label="Wit activation checks"
           checked={options.useIntChecks}
           onChange={(v) => onOptionsChange({ ...options, useIntChecks: v })}

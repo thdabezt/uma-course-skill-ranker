@@ -241,6 +241,8 @@ export interface SkillData {
 	extraCondition: DynamicCondition
 	effects: SkillEffect[]
 	tags: number[]
+	/** LOCAL: index of the skill alternative (condition group) this trigger came from; absent for engine hooks. */
+	alternative?: number
 }
 
 /**
@@ -340,7 +342,8 @@ export function buildSkillData(
 				regions: regions,
 				extraCondition: extraCondition,
 				effects: effects,
-				tags: skills[skillId].tags
+				tags: skills[skillId].tags,
+				alternative: i
 			});
 		}
 	}
@@ -365,7 +368,8 @@ export function buildSkillData(
 			regions: afterEnd,
 			extraCondition: (_: RaceState) => false,
 			effects: effects,
-			tags: skills[skillId].tags
+			tags: skills[skillId].tags,
+			alternative: 0
 		}];
 	}
 }
@@ -592,6 +596,12 @@ export class RaceSolverBuilder {
 
 	withActivateCountsAsRandom() {
 		this._parser = acrParser;
+		return this;
+	}
+
+	/** LOCAL: install a condition parser built from a custom condition table (see src/engine/requirements.ts). */
+	withParser(parser: {parse: any, tokenize: any}) {
+		this._parser = parser;
 		return this;
 	}
 

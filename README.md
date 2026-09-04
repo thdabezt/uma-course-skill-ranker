@@ -57,7 +57,7 @@ Then open <http://localhost:3000>.
 | `npm run data:refresh` | Both of the above |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest (`EXPLORE=1 npx vitest run tests/explore.test.ts` prints a full verdict sweep) |
+| `npm test` | Vitest (`EXPLORE=1 npx vitest run tests/explore.test.ts` prints a full verdict sweep; `SWEEP=1 npx vitest run tests/sweep.test.ts` lists every skill that fires in fewer than 100 % of runs, with its conditions) |
 
 `data/normalized/` is committed, so the app runs without a network round-trip. `data/raw/` is gitignored and reproducible via `npm run data:fetch`. A scheduled workflow refreshes it daily (see [Automatic data refresh](#automatic-data-refresh)).
 
@@ -153,6 +153,10 @@ skill proc rate  = max(1 - 90 / wit, 0.2)        (only rolled when "Wit activati
 ```
 
 Limitations inherited from the engine: skills with cooldowns fire once, conditions that depend on other runners are modelled by probability distributions, and lane changes and dueling are not simulated. Running-position conditions (`order`, `order_rate`) are treated as reachable by any style by default, so every skill whose zone exists on the course is evaluated; the "Assume position from style" toggle in the Stamina tab switches to umalator's rule (front runner 1st, pace chaser 2nd–4th, others 5th–9th of 9).
+
+### Skill requirements
+
+A paired comparison races one runner with one skill, so some conditions can never hold in it: skill-activation counters ("7 skills activated", "a recovery skill used"), "another skill just fired", popularity, the starting gate, a named rival in the field. Those are **assumed to hold** (`src/engine/requirements.ts`): counters are placed the way umalator's skill table places them ("7 skills activated" at the start of its zone, other counters at a random point of the stretch where the Nth skill plausibly fires), everything else is treated as satisfied, and a skill with a strong and a weak variant is valued on the strong one. The row then says what it assumed (a "Needs setup" chip and a *Needs:* line), so a value always reads "worth X lengths, given Y". Conditions the simulation rolls itself — rushing, the start reaction, HP, dice — stay simulated, and the row reports the share of runs that met them. The "Assume skill requirements" toggle in the Stamina tab turns the assumption off. A skill that still cannot fire names the condition that fails (distance category, surface, track, running style, ground, weather, season, a missing slope or corner).
 
 ---
 

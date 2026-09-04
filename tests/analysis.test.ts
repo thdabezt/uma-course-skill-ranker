@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { courses, skills } from '@/data';
-import { analyzeSkill, createAnalysisContext } from '@/analysis/skillAnalysis';
+import { DEFAULT_SIMULATION_OPTIONS, analyzeSkill, createAnalysisContext } from '@/analysis/skillAnalysis';
 import { isAccelSkill, isSpeedSkill } from '@/analysis/rankSkills';
 import { DEFAULT_RUNNER } from '@/simulation/config';
 import type { RaceSetup, RunnerStats } from '@/simulation/types';
@@ -120,6 +120,58 @@ describe('skill analysis', () => {
     const b = analyzeSkill(assumed, skill, 8);
     expect(b.reliability).toBe('never');
     expect(b.accel?.explanation).toContain('running-position');
+  });
+
+  it('values a skill-counter unique on the assumption that the count is reached, and says so', () => {
+    // Barcarole of Blessings: 400 m remaining & top 40% & >= 7 skills activated (variant 2: <= 6, weaker).
+    const ctx = createAnalysisContext(setupFor(course('Tokyo', 'turf', 2400)), runner);
+    const a = analyzeSkill(ctx, skillByName('Barcarole of Blessings', 'inherited_unique'), 12);
+    expect(a.reliability).toBe('immediate');
+    expect(a.activation?.rate).toBe(1);
+    expect(a.activation?.meanStart).toBeCloseTo(2000, -1);
+    expect(a.gain.mean).toBeGreaterThan(0.3);
+    expect(a.requirements.assumed).toEqual(['7 skills activated earlier in the race (with fewer, variant 2 fires instead)']);
+    expect(a.speed?.explanation).toContain('Assumes 7 skills activated earlier in the race');
+    // Without the assumption the counter can never be reached by a lone runner.
+    const raw = createAnalysisContext(setupFor(course('Tokyo', 'turf', 2400)), runner, { ...DEFAULT_SIMULATION_OPTIONS, assumeRequirements: false });
+    const b = analyzeSkill(raw, skillByName('Barcarole of Blessings', 'inherited_unique'), 12);
+    expect(b.activation).toBeNull();
+    expect(b.speed?.explanation).toContain('did not fire');
+  });
+
+  it('places other activation counters the way umalator does and lists the requirement', () => {
+    const ctx = createAnalysisContext(setupFor(course('Tokyo', 'turf', 2400)), runner);
+    const tail = analyzeSkill(ctx, skillByName('Tail Held High'), 12);
+    expect(tail.reliability).toBe('random');
+    expect(tail.activation?.rate).toBe(1);
+    expect(tail.requirements.assumed).toEqual(['3 skills activated mid-race']);
+    const dreams = analyzeSkill(ctx, skillByName('Dreams Donned with Pride!', 'inherited_unique'), 12);
+    expect(dreams.activation?.rate).toBe(1);
+    expect(dreams.requirements.assumed[0]).toContain('another skill activating');
+    const heal = analyzeSkill(ctx, skillByName('A Kiss for Courage', 'inherited_unique'), 12);
+    expect(heal.activation?.rate).toBe(1);
+    expect(heal.requirements.assumed).toEqual(['a recovery skill activated earlier']);
+  });
+
+  it('reports simulated requirements (rushing) with the share of runs that met them', () => {
+    const ctx = createAnalysisContext(setupFor(course('Tokyo', 'turf', 2400)), runner);
+    const a = analyzeSkill(ctx, skillByName('Call Me King', 'unique'), 24);
+    expect(a.requirements.modelled).toEqual(['not rushing']);
+    expect(a.activation!.rate).toBeLessThan(1);
+    expect(a.speed?.explanation).toMatch(/Needs not rushing; that held in \d+% of runs/);
+  });
+
+  it('names the failing condition when a skill can never fire here', () => {
+    const ctx = createAnalysisContext(setupFor(course('Tokyo', 'turf', 2400)), runner);
+    const long = analyzeSkill(ctx, skillByName('Long Corners ○'), 8);
+    expect(long.reliability).toBe('never');
+    expect((long.accel ?? long.speed)?.explanation).toBe('Long races only; this is a Medium race.');
+    const dirt = analyzeSkill(ctx, skillByName('Comeback'), 8);
+    expect((dirt.accel ?? dirt.speed)?.explanation).toBe('Dirt only; this course is turf.');
+    const either = analyzeSkill(ctx, skillByName('Leap Forward'), 8);
+    expect((either.accel ?? either.speed)?.explanation).toBe('Sprint or Mile races only; this is a Medium race.');
+    const styled = analyzeSkill(ctx, skillByName('Early Lead'), 8);
+    expect((styled.accel ?? styled.speed)?.explanation).toBe('Restricted to Front Runner; the runner is a Pace Chaser.');
   });
 
   it('distinguishes the Kyoto 1600 inner and outer layouts', () => {

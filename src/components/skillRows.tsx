@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import type { RarityFilter } from '@/analysis/rankSkills';
 import { matchesRarity } from '@/analysis/rankSkills';
+import type { Requirements } from '@/analysis/requirements';
 import type { Reliability, SkillAnalysis } from '@/analysis/skillAnalysis';
 import { conditionDocByName } from '@/data';
 import { EFFICIENCY_SP_BASIS, RUNNING_STYLE_LABELS, type RunningStyle } from '@/simulation/config';
@@ -54,6 +55,26 @@ const RELIABILITY_HINT: Record<Reliability, string> = {
   passive: 'Permanent effect applied from the gate.',
   never: 'Its conditions cannot hold on this course with this runner; the row explains which one. A running-position condition can be relaxed in the Stamina tab ("Assume position from style").',
 };
+
+/** Marks a skill whose value is conditional on something the race has to provide. */
+export function RequirementChip({ requirements }: { requirements: Requirements }) {
+  if (!requirements.assumed.length) return null;
+  return (
+    <Badge tone="warn" title={`Assumed to hold: ${requirements.assumed.join('; ')}. The numbers only count when it does.`}>
+      Needs setup
+    </Badge>
+  );
+}
+
+/** Trigger chip plus the requirement chip, for table cells. */
+export function TriggerChips({ analysis }: { analysis: SkillAnalysis }) {
+  return (
+    <span className="flex flex-wrap gap-1">
+      <ReliabilityChip reliability={analysis.reliability} />
+      <RequirementChip requirements={analysis.requirements} />
+    </span>
+  );
+}
 
 export function RarityChip({ skill }: { skill: Skill }) {
   return <Badge tone={RARITY_TONE[skill.rarity] ?? 'neutral'}>{RARITY_LABEL[skill.rarity] ?? skill.rarity}</Badge>;
@@ -136,6 +157,24 @@ export function AnalysisDetails({ row, courseDistance }: { row: SkillRow; course
         <p>
           <span className="font-semibold">Speed value: </span>
           {a.speed.explanation}
+        </p>
+      )}
+      {(a.requirements.assumed.length > 0 || a.requirements.modelled.length > 0) && (
+        <p>
+          <span className="font-semibold">Needs: </span>
+          {a.requirements.assumed.length > 0 && (
+            <span>
+              {a.requirements.assumed.join('; ')}
+              <span className="text-[var(--color-ink-dim)]"> (assumed to hold; the numbers are conditional on it)</span>
+              {a.requirements.modelled.length > 0 ? '. ' : ''}
+            </span>
+          )}
+          {a.requirements.modelled.length > 0 && (
+            <span>
+              {a.requirements.modelled.join('; ')}
+              <span className="text-[var(--color-ink-dim)]"> (rolled by the simulation; see &quot;Fired in&quot;)</span>
+            </span>
+          )}
         </p>
       )}
       {a.error && <p className="text-[var(--color-bad)]">Could not simulate: {a.error}</p>}

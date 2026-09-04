@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 
 import type { RankedCharacter } from '@/analysis/characterRanking';
 import { RUNNING_STYLE_LABELS, type RunningStyle } from '@/simulation/config';
-import { AnalysisDetails, ReliabilityChip, num } from './skillRows';
+import { AnalysisDetails, ReliabilityChip, RequirementChip, num } from './skillRows';
 import { Badge, EmptyState, ExternalLink, Panel, Toggle } from './ui';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -97,6 +97,7 @@ export function CharacterTab({
                       <AptitudeChip label="Distance" value={r.aptitude.distance} ok={r.aptitude.distanceOk} />
                       <AptitudeChip label="Style" value={r.aptitude.style} ok={r.aptitude.styleOk} />
                       {unique?.analysis && <ReliabilityChip reliability={unique.analysis.reliability} />}
+                      {unique?.analysis && <RequirementChip requirements={unique.analysis.requirements} />}
                     </span>
                   </span>
                   <span className="text-right">

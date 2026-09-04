@@ -16,6 +16,9 @@ re-synced:
 * strict-mode type annotations;
 * mechanics present in the deployed Global umalator bundle but not yet in the
   public source (spot struggle, unique-level scaling), ported from that bundle and
-  marked with `// GLOBAL BUNDLE:` comments.
+  marked with `// GLOBAL BUNDLE:` comments;
+* two small additions marked `LOCAL:` in `RaceSolverBuilder.ts`: `SkillData.alternative`
+  (which condition group a trigger came from) and `withParser()` (a condition table
+  with extra assumptions, see `../requirements.ts`).
 
 Everything outside `vendor/` is this project's own code.
