@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-13T10:45:46.196Z",
-  "dataFetchedAt": "2026-10-13T10:45:45.958Z",
+  "generatedAt": "2026-10-14T08:50:13.980Z",
+  "dataFetchedAt": "2026-10-14T08:50:13.734Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "dcb54b32",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.dcb54b32.json"
+        "contentHash": "6db91495",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.6db91495.json"
       },
       {
         "key": "characters",
@@ -22,8 +22,8 @@
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "ab67217e",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.ab67217e.json"
+        "contentHash": "70baee00",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.70baee00.json"
       },
       {
         "key": "racetracks",
@@ -52,8 +52,8 @@
       {
         "key": "events/champions-meeting",
         "file": "champions-meeting-jp.json",
-        "contentHash": "ccf98e59",
-        "sourceUrl": "https://gametora.com/data/umamusume/events/champions-meeting.ccf98e59.json"
+        "contentHash": "07347a45",
+        "sourceUrl": "https://gametora.com/data/umamusume/events/champions-meeting.07347a45.json"
       },
       {
         "key": "static/skill_conditions",
@@ -69,11 +69,11 @@
     "characters": 108,
     "conditions": 145,
     "excludedCourses": 19,
-    "excludedSkills": 1349,
-    "excludedCharacters": 162,
+    "excludedSkills": 1354,
+    "excludedCharacters": 163,
     "excludedNegativeSkills": 50,
-    "championsMeetingPresets": 47,
-    "upcomingChampionsMeetings": 27,
+    "championsMeetingPresets": 48,
+    "upcomingChampionsMeetings": 28,
     "inheritedUniqueSkills": 109,
     "skillsUsingGlobalOverride": 92,
     "charactersWithGameToraUrl": 108,
