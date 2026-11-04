@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-03T11:00:42.678Z",
-  "dataFetchedAt": "2026-11-03T11:00:42.425Z",
+  "generatedAt": "2026-11-04T11:08:11.670Z",
+  "dataFetchedAt": "2026-11-04T11:08:11.422Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "42176dc6",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.42176dc6.json"
+        "contentHash": "11a2e552",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.11a2e552.json"
       },
       {
         "key": "characters",
@@ -46,8 +46,8 @@
       {
         "key": "en/events/champions-meeting",
         "file": "champions-meeting-global.json",
-        "contentHash": "5b362037",
-        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.5b362037.json"
+        "contentHash": "94a87b60",
+        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.94a87b60.json"
       },
       {
         "key": "events/champions-meeting",
@@ -73,7 +73,7 @@
     "excludedCharacters": 160,
     "excludedNegativeSkills": 50,
     "championsMeetingPresets": 48,
-    "upcomingChampionsMeetings": 28,
+    "upcomingChampionsMeetings": 27,
     "inheritedUniqueSkills": 112,
     "skillsUsingGlobalOverride": 92,
     "charactersWithGameToraUrl": 112,
