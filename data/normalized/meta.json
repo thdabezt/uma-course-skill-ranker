@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-05T11:08:46.054Z",
-  "dataFetchedAt": "2026-11-05T11:08:45.839Z",
+  "generatedAt": "2026-11-06T11:06:04.461Z",
+  "dataFetchedAt": "2026-11-06T11:06:04.216Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,20 +10,20 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "11a2e552",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.11a2e552.json"
+        "contentHash": "1e76ad11",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.1e76ad11.json"
       },
       {
         "key": "characters",
         "file": "characters.json",
-        "contentHash": "690aa811",
-        "sourceUrl": "https://gametora.com/data/umamusume/characters.690aa811.json"
+        "contentHash": "72be98b8",
+        "sourceUrl": "https://gametora.com/data/umamusume/characters.72be98b8.json"
       },
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "897e63ea",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.897e63ea.json"
+        "contentHash": "0e9f93ec",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.0e9f93ec.json"
       },
       {
         "key": "racetracks",
@@ -46,8 +46,8 @@
       {
         "key": "en/events/champions-meeting",
         "file": "champions-meeting-global.json",
-        "contentHash": "94a87b60",
-        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.94a87b60.json"
+        "contentHash": "c7bd9b32",
+        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.c7bd9b32.json"
       },
       {
         "key": "events/champions-meeting",
@@ -65,19 +65,19 @@
   },
   "counts": {
     "courses": 119,
-    "skills": 689,
-    "characters": 112,
+    "skills": 699,
+    "characters": 113,
     "conditions": 145,
     "excludedCourses": 19,
-    "excludedSkills": 1371,
-    "excludedCharacters": 160,
+    "excludedSkills": 1364,
+    "excludedCharacters": 159,
     "excludedNegativeSkills": 50,
     "championsMeetingPresets": 48,
-    "upcomingChampionsMeetings": 27,
-    "inheritedUniqueSkills": 112,
+    "upcomingChampionsMeetings": 26,
+    "inheritedUniqueSkills": 115,
     "skillsUsingGlobalOverride": 92,
-    "charactersWithGameToraUrl": 112,
-    "skillsWithGameToraUrl": 241,
+    "charactersWithGameToraUrl": 113,
+    "skillsWithGameToraUrl": 243,
     "rejected": 0
   },
   "courseAudit": {
