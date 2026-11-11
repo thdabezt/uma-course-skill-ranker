@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-10T11:23:31.460Z",
-  "dataFetchedAt": "2026-11-10T11:23:31.213Z",
+  "generatedAt": "2026-11-11T11:10:19.845Z",
+  "dataFetchedAt": "2026-11-11T11:10:19.604Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "1465e796",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.1465e796.json"
+        "contentHash": "168c80eb",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.168c80eb.json"
       },
       {
         "key": "characters",
@@ -22,8 +22,8 @@
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "7b6728c3",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.7b6728c3.json"
+        "contentHash": "c9a06cc4",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.c9a06cc4.json"
       },
       {
         "key": "racetracks",
@@ -69,8 +69,8 @@
     "characters": 115,
     "conditions": 145,
     "excludedCourses": 19,
-    "excludedSkills": 1364,
-    "excludedCharacters": 157,
+    "excludedSkills": 1369,
+    "excludedCharacters": 158,
     "excludedNegativeSkills": 50,
     "championsMeetingPresets": 48,
     "upcomingChampionsMeetings": 26,
