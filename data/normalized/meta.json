@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-14T10:38:40.903Z",
-  "dataFetchedAt": "2026-11-14T10:38:40.724Z",
+  "generatedAt": "2026-11-15T11:11:04.812Z",
+  "dataFetchedAt": "2026-11-15T11:11:04.629Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "6dca51bd",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.6dca51bd.json"
+        "contentHash": "cf95f056",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.cf95f056.json"
       },
       {
         "key": "characters",
@@ -22,8 +22,8 @@
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "15566073",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.15566073.json"
+        "contentHash": "6b54efe4",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.6b54efe4.json"
       },
       {
         "key": "racetracks",
@@ -46,14 +46,14 @@
       {
         "key": "en/events/champions-meeting",
         "file": "champions-meeting-global.json",
-        "contentHash": "c7bd9b32",
-        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.c7bd9b32.json"
+        "contentHash": "b09ac21f",
+        "sourceUrl": "https://gametora.com/data/umamusume/en/events/champions-meeting.b09ac21f.json"
       },
       {
         "key": "events/champions-meeting",
         "file": "champions-meeting-jp.json",
-        "contentHash": "07347a45",
-        "sourceUrl": "https://gametora.com/data/umamusume/events/champions-meeting.07347a45.json"
+        "contentHash": "50c067a2",
+        "sourceUrl": "https://gametora.com/data/umamusume/events/champions-meeting.50c067a2.json"
       },
       {
         "key": "static/skill_conditions",
