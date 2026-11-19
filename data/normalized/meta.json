@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-18T11:55:15.508Z",
-  "dataFetchedAt": "2026-11-18T11:55:15.354Z",
+  "generatedAt": "2026-11-19T11:51:51.469Z",
+  "dataFetchedAt": "2026-11-19T11:51:51.280Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,8 +10,8 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "15f537cc",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.15f537cc.json"
+        "contentHash": "e5ec7fdb",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.e5ec7fdb.json"
       },
       {
         "key": "characters",
@@ -22,14 +22,14 @@
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "8ef6af97",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.8ef6af97.json"
+        "contentHash": "63f837a8",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.63f837a8.json"
       },
       {
         "key": "racetracks",
         "file": "racetracks.json",
-        "contentHash": "7d2f3355",
-        "sourceUrl": "https://gametora.com/data/umamusume/racetracks.7d2f3355.json"
+        "contentHash": "c056cc80",
+        "sourceUrl": "https://gametora.com/data/umamusume/racetracks.c056cc80.json"
       },
       {
         "key": "racetracks_extended",
