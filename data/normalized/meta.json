@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-21T11:21:32.408Z",
-  "dataFetchedAt": "2026-11-21T11:21:32.245Z",
+  "generatedAt": "2026-11-22T11:38:51.947Z",
+  "dataFetchedAt": "2026-11-22T11:38:51.791Z",
   "server": "Global (EN)",
   "source": {
     "name": "GameTora",
@@ -10,20 +10,20 @@
       {
         "key": "skills",
         "file": "skills.json",
-        "contentHash": "e5ec7fdb",
-        "sourceUrl": "https://gametora.com/data/umamusume/skills.e5ec7fdb.json"
+        "contentHash": "7500a994",
+        "sourceUrl": "https://gametora.com/data/umamusume/skills.7500a994.json"
       },
       {
         "key": "characters",
         "file": "characters.json",
-        "contentHash": "9c1ce121",
-        "sourceUrl": "https://gametora.com/data/umamusume/characters.9c1ce121.json"
+        "contentHash": "46e1d4c9",
+        "sourceUrl": "https://gametora.com/data/umamusume/characters.46e1d4c9.json"
       },
       {
         "key": "character-cards",
         "file": "character-cards.json",
-        "contentHash": "63f837a8",
-        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.63f837a8.json"
+        "contentHash": "a0b8ce3c",
+        "sourceUrl": "https://gametora.com/data/umamusume/character-cards.a0b8ce3c.json"
       },
       {
         "key": "racetracks",
@@ -65,19 +65,19 @@
   },
   "counts": {
     "courses": 119,
-    "skills": 699,
-    "characters": 115,
+    "skills": 701,
+    "characters": 116,
     "conditions": 145,
     "excludedCourses": 19,
-    "excludedSkills": 1375,
-    "excludedCharacters": 159,
+    "excludedSkills": 1374,
+    "excludedCharacters": 158,
     "excludedNegativeSkills": 50,
     "championsMeetingPresets": 48,
     "upcomingChampionsMeetings": 26,
-    "inheritedUniqueSkills": 115,
+    "inheritedUniqueSkills": 116,
     "skillsUsingGlobalOverride": 92,
-    "charactersWithGameToraUrl": 115,
-    "skillsWithGameToraUrl": 247,
+    "charactersWithGameToraUrl": 116,
+    "skillsWithGameToraUrl": 249,
     "rejected": 0
   },
   "courseAudit": {
